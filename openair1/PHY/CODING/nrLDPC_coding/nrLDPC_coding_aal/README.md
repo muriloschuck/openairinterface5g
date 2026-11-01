@@ -130,6 +130,31 @@ For the Intel ACCs, while we also use CB mode mostly, there is a special case th
 In such a case, we perform a check on whether there is only one TB, AND if the TB has only one CB.
 If so, this has to be handled separately by using TB mode.
 
+### Compute Extension (runtime execution parameters)
+
+With `-DENABLE_LDPC_AAL_EXT=ON` (default), the LPU can publish runtime execution parameters: a typed descriptor
+(name, type, domain, default, unit, category, scope), see `aal_compute_ext.h`. The AAL Implementation
+(`aal_compute_ext.c`) intersects the descriptor with the infrastructure limits and serves the operations on a UNIX
+socket, one request per line and one JSON object per response:
+
+| Request | Function |
+|---|---|
+| `getAalLpuComputeCapabilities` | descriptor with the effective domain of each parameter |
+| `setAalLpuComputeConfig [expected_version=<v>] <name>=<value> ...` | validates all values, then applies them as one new configuration version |
+| `getAalLpuComputeConfig` | values in force, version, time of application |
+| `getAalLpuComputeStats` | bursts, ops and processing time per configuration version |
+| `setAalAccelConfig limits=<file>` | loads the infrastructure limits (`<name> <min> <max>` per line); values in force outside them are clamped |
+
+A new configuration takes effect at the next burst. A device without the extension publishes an empty descriptor.
+`baseband_oai_sw` publishes `oai_sw.mode` (`seq`, `par`), `oai_sw.workers` (1..16) and `oai_sw.batch` (1..64):
+in `par`, the code blocks of a decoding burst are processed by `oai_sw.workers` tasks of a thread pool, each taking
+`oai_sw.batch` code blocks at a time.
+
+Options, in the `nrLDPC_coding_aal` section:
+- `ctl_sock`: socket path (default `/tmp/aal_ext.sock`)
+- `limits`: infrastructure limits file, loaded at startup
+- `compute`: initial configuration, e.g. `oai_sw.mode=par,oai_sw.workers=4`
+
 ### Future Work(s)
 
 #### TB mode

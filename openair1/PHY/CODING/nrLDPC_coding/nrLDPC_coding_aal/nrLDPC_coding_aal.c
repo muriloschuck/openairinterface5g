@@ -13,6 +13,9 @@
 
 #include "PHY/CODING/nrLDPC_decoder/nrLDPCdecoder_defs.h"
 #include "PHY/CODING/coding_defs.h"
+#ifdef ENABLE_LDPC_AAL_EXT
+#include "aal_compute_ext.h"
+#endif
 
 #include <stdint.h>
 #include <getopt.h>
@@ -1087,6 +1090,11 @@ int32_t nrLDPC_coding_init(int max_num_pxsch)
   char *vfio_vf_token = NULL; // vfio token for the bbdev card
   uint32_t num_harq_codeblock = 0; // size of the HARQ buffer in terms of the number of 32K blocks
   uint32_t is_t2 = 0;
+#ifdef ENABLE_LDPC_AAL_EXT
+  char *ext_ctl_sock = NULL; // UNIX socket of the AALI-C-App compute operations
+  char *ext_limits = NULL; // infrastructure limits on the runtime parameters (IMS -> HAM)
+  char *ext_compute = NULL; // initial runtime parameters, "name=value,name=value"
+#endif
   paramdef_t LoaderParams[] = {
       {"dpdk_dev", NULL, 0, .strptr = &dpdk_dev, .defstrval = NULL, TYPE_STRING, 0, NULL},
       {"dpdk_core_list", NULL, 0, .strptr = &dpdk_core_list, .defstrval = NULL, TYPE_STRING, 0, NULL},
@@ -1094,6 +1102,11 @@ int32_t nrLDPC_coding_init(int max_num_pxsch)
       {"vfio_vf_token", NULL, 0, .strptr = &vfio_vf_token, .defstrval = NULL, TYPE_STRING, 0, NULL},
       {"num_harq_codeblock", NULL, 0, .uptr = &num_harq_codeblock, .defintval = 512, TYPE_UINT32, 0, NULL},
       {"is_t2", NULL, 0, .uptr = &is_t2, .defintval = 0, TYPE_UINT8, 0, NULL},
+#ifdef ENABLE_LDPC_AAL_EXT
+      {"ctl_sock", NULL, 0, .strptr = &ext_ctl_sock, .defstrval = "/tmp/aal_ext.sock", TYPE_STRING, 0, NULL},
+      {"limits", NULL, 0, .strptr = &ext_limits, .defstrval = NULL, TYPE_STRING, 0, NULL},
+      {"compute", NULL, 0, .strptr = &ext_compute, .defstrval = NULL, TYPE_STRING, 0, NULL},
+#endif
   };
   config_get(config_get_if(), LoaderParams, sizeofArray(LoaderParams), "nrLDPC_coding_aal");
   if (dpdk_dev == NULL)
@@ -1162,6 +1175,12 @@ int32_t nrLDPC_coding_init(int max_num_pxsch)
   AssertFatal(add_dev(dev_id, is_t2, num_harq_codeblock) == 0, "Failed to setup bbdev");
   AssertFatal(rte_bbdev_stats_reset(dev_id) == 0, "Failed to reset stats of bbdev %u", dev_id);
   AssertFatal(rte_bbdev_start(dev_id) == 0, "Failed to start bbdev %u", dev_id);
+#ifdef ENABLE_LDPC_AAL_EXT
+  if (aal_compute_ext_init(info.drv.driver_name, ext_ctl_sock, ext_limits, ext_compute) != 0) {
+    LOG_E(NR_PHY, "AAL compute extension failed to start\n");
+    return -1;
+  }
+#endif
 
   // the previous calls have populated this global variable (beurk)
   //  One more global to remove, not thread safe global op_params
@@ -1191,6 +1210,9 @@ int32_t nrLDPC_coding_shutdown()
 {
   int dev_id = 0;
   struct rte_bbdev_stats stats;
+#ifdef ENABLE_LDPC_AAL_EXT
+  aal_compute_ext_shutdown();
+#endif
   free(active_dev.harq_buffers);
   free_mempools(&active_dev);
   rte_free(op_params);

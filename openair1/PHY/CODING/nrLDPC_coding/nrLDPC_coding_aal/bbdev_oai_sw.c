@@ -13,6 +13,11 @@
  *        output (K-F)/8 bytes, or (K-F-24)/8 with CRC_TYPE_24B_DROP, MSB first.
  *   HARQ: internal device memory (advertised in the capabilities); the slot is
  *        harq_combined_output.offset / LDPC_MAX_CB_SIZE, as nrLDPC_coding_aal.c lays out internal memory.
+ *
+ * With ENABLE_LDPC_AAL_EXT, the device also publishes runtime execution parameters (aal_compute_ext.h): the code
+ * blocks of a decoding burst are processed serially (oai_sw.mode=seq) or by oai_sw.workers tasks of an OAI thread
+ * pool, each taking oai_sw.batch code blocks at a time (oai_sw.mode=par). Code blocks are independent (each has its
+ * own HARQ slot and output mbuf), so the output does not depend on the configuration.
  */
 
 #ifndef _GNU_SOURCE
@@ -39,6 +44,17 @@
 #include "nrLDPC_coding_aal.h"            /* LDPC_MAX_CB_SIZE */
 #include "PHY/CODING/coding_defs.h"       /* crcType, lenWithCrc, check_crc, nr_get_R_ldpc_decoder */
 #include "PHY/CODING/nrLDPC_defs.h"       /* encoder_implemparams_t, LDPC_*func_t, t_nrLDPC_dec_params */
+
+#ifdef ENABLE_LDPC_AAL_EXT
+#include <pthread.h>
+#include <sched.h>
+#include <stdatomic.h>
+#include <time.h>
+#include <rte_lcore.h>
+#include "common/utils/threadPool/thread-pool.h"
+#include "common/utils/threadPool/task_ans.h"
+#include "bbdev_oai_sw.h"
+#endif
 
 #define DRIVER_NAME baseband_oai_sw
 #define OAI_SW_MAX_QUEUES 8
@@ -373,6 +389,227 @@ static void process_ldpc_dec(struct rte_bbdev_dec_op *op)
   dec->harq_combined_output.length = mother_len(BG, Z);
 }
 
+#ifdef ENABLE_LDPC_AAL_EXT
+/* ------------------------------------------------------------------------ */
+/* Runtime execution parameters (AAL compute extension)                     */
+/* ------------------------------------------------------------------------ */
+enum { OAI_SW_PARAM_MODE, OAI_SW_PARAM_WORKERS, OAI_SW_PARAM_BATCH, OAI_SW_NB_PARAMS };
+enum { OAI_SW_MODE_SEQ, OAI_SW_MODE_PAR };
+#define OAI_SW_MAX_WORKERS 16
+#define OAI_SW_MAX_BATCH 64
+
+static const aal_compute_param_t oai_sw_params[OAI_SW_NB_PARAMS] = {
+    [OAI_SW_PARAM_MODE] = {.name = "oai_sw.mode",
+                           .type = AAL_COMPUTE_TYPE_ENUM,
+                           .min = OAI_SW_MODE_SEQ,
+                           .max = OAI_SW_MODE_PAR,
+                           .step = 1,
+                           .nb_enum_values = 2,
+                           .enum_values = {"seq", "par"},
+                           .default_value = OAI_SW_MODE_SEQ,
+                           .unit = "",
+                           .category = AAL_COMPUTE_CATEGORY_PARALLELISM,
+                           .scope = AAL_COMPUTE_SCOPE_LPU,
+                           .description = "seq: code blocks decoded serially; par: code blocks distributed across workers"},
+    [OAI_SW_PARAM_WORKERS] = {.name = "oai_sw.workers",
+                              .type = AAL_COMPUTE_TYPE_INT,
+                              .min = 1,
+                              .max = OAI_SW_MAX_WORKERS,
+                              .step = 1,
+                              .default_value = 1,
+                              .unit = "threads",
+                              .category = AAL_COMPUTE_CATEGORY_PARALLELISM,
+                              .scope = AAL_COMPUTE_SCOPE_LPU,
+                              .description = "number of worker threads used when mode is par"},
+    [OAI_SW_PARAM_BATCH] = {.name = "oai_sw.batch",
+                            .type = AAL_COMPUTE_TYPE_INT,
+                            .min = 1,
+                            .max = OAI_SW_MAX_BATCH,
+                            .step = 1,
+                            .default_value = 1,
+                            .unit = "CBs",
+                            .category = AAL_COMPUTE_CATEGORY_BATCHING,
+                            .scope = AAL_COMPUTE_SCOPE_LPU,
+                            .description = "code blocks processed per worker task"},
+};
+
+typedef struct {
+  int32_t values[OAI_SW_NB_PARAMS];
+  uint32_t version;
+  uint64_t t_applied_ns;
+} oai_sw_cfg_t;
+
+/* cfg and cfg_stats are written by the control thread (apply) and read by the data path (one snapshot per burst) */
+static pthread_mutex_t cfg_lock = PTHREAD_MUTEX_INITIALIZER;
+static oai_sw_cfg_t cfg = {.values = {OAI_SW_MODE_SEQ, 1, 1}, .version = 1};
+static aal_compute_stats_t cfg_stats[AAL_COMPUTE_STATS_VERSIONS];
+/* created at probe, so that switching to par at runtime does not pay for thread creation */
+static tpool_t workers_pool;
+
+static uint64_t oai_sw_now_ns(void)
+{
+  struct timespec ts;
+  clock_gettime(CLOCK_MONOTONIC, &ts);
+  return (uint64_t)ts.tv_sec * 1000000000ULL + ts.tv_nsec;
+}
+
+/* starts the statistics of the version in force; called with cfg_lock held */
+static void cfg_stats_open(void)
+{
+  cfg_stats[cfg.version % AAL_COMPUTE_STATS_VERSIONS] =
+      (aal_compute_stats_t){.version = cfg.version, .t_applied_ns = cfg.t_applied_ns};
+}
+
+/* CPUs the process could use before rte_eal_init() pinned the main thread to its lcore; the constructor runs when
+ * libldpc_aal.so is loaded, before the adapter initializes EAL */
+static cpu_set_t process_cpus;
+RTE_INIT(oai_sw_save_process_cpus)
+{
+  if (sched_getaffinity(0, sizeof(process_cpus), &process_cpus) != 0)
+    CPU_ZERO(&process_cpus);
+}
+
+/* worker CPUs: the process CPUs minus the EAL lcores, the same rule EAL applies to its own control threads */
+static void workers_cpuset(cpu_set_t *set)
+{
+  *set = process_cpus;
+  unsigned int lcore;
+  RTE_LCORE_FOREACH(lcore)
+  {
+    const rte_cpuset_t l = rte_lcore_cpuset(lcore);
+    for (int c = 0; c < CPU_SETSIZE; c++)
+      if (CPU_ISSET(c, &l))
+        CPU_CLR(c, set);
+  }
+  if (CPU_COUNT(set) == 0) /* no CPU left outside the lcores: share them */
+    *set = process_cpus;
+}
+
+static void oai_sw_cfg_init(void)
+{
+  /* this runs inside rte_eal_init() on the main lcore, and tpool threads inherit the affinity of their creator:
+   * without this, every worker would be pinned to the main lcore */
+  cpu_set_t workers, self;
+  workers_cpuset(&workers);
+  char list[3 * CPU_SETSIZE] = "";
+  for (int c = 0, n = 0; c < CPU_SETSIZE; c++)
+    if (CPU_ISSET(c, &workers))
+      n += snprintf(list + n, sizeof(list) - n, "%s%d", n ? "," : "", c);
+  const bool pinned = CPU_COUNT(&workers) > 0 && pthread_getaffinity_np(pthread_self(), sizeof(self), &self) == 0
+                      && pthread_setaffinity_np(pthread_self(), sizeof(workers), &workers) == 0;
+  initFloatingCoresTpool(OAI_SW_MAX_WORKERS, &workers_pool, false, "oai_sw_dec");
+  if (pinned)
+    pthread_setaffinity_np(pthread_self(), sizeof(self), &self);
+  OAI_SW_LOG("%d workers, CPUs %s", OAI_SW_MAX_WORKERS, pinned ? list : "herdadas (afinidade não alterada)");
+  pthread_mutex_lock(&cfg_lock);
+  cfg.t_applied_ns = oai_sw_now_ns();
+  cfg_stats_open();
+  pthread_mutex_unlock(&cfg_lock);
+}
+
+static uint32_t oai_sw_compute_apply(const int32_t *values)
+{
+  pthread_mutex_lock(&cfg_lock);
+  memcpy(cfg.values, values, sizeof(cfg.values));
+  cfg.version++;
+  cfg.t_applied_ns = oai_sw_now_ns();
+  cfg_stats_open();
+  const uint32_t version = cfg.version;
+  pthread_mutex_unlock(&cfg_lock);
+  return version;
+}
+
+static uint32_t oai_sw_compute_get(int32_t *values, uint64_t *t_applied_ns)
+{
+  pthread_mutex_lock(&cfg_lock);
+  memcpy(values, cfg.values, sizeof(cfg.values));
+  *t_applied_ns = cfg.t_applied_ns;
+  const uint32_t version = cfg.version;
+  pthread_mutex_unlock(&cfg_lock);
+  return version;
+}
+
+static int oai_sw_compute_get_stats(aal_compute_stats_t *stats, int max)
+{
+  int n = 0;
+  pthread_mutex_lock(&cfg_lock);
+  for (uint32_t v = cfg.version; v > 0 && n < max && n < AAL_COMPUTE_STATS_VERSIONS; v--) {
+    const aal_compute_stats_t *s = &cfg_stats[v % AAL_COMPUTE_STATS_VERSIONS];
+    if (s->version == v)
+      stats[n++] = *s;
+  }
+  pthread_mutex_unlock(&cfg_lock);
+  return n;
+}
+
+static const aal_compute_lpu_ops_t oai_sw_compute = {
+    .lpu_handle = RTE_STR(DRIVER_NAME),
+    .nb_params = OAI_SW_NB_PARAMS,
+    .params = oai_sw_params,
+    .apply = oai_sw_compute_apply,
+    .get = oai_sw_compute_get,
+    .get_stats = oai_sw_compute_get_stats,
+};
+
+const aal_compute_lpu_ops_t *oai_sw_compute_ops(void)
+{
+  return &oai_sw_compute;
+}
+
+static oai_sw_cfg_t oai_sw_cfg_snapshot(void)
+{
+  pthread_mutex_lock(&cfg_lock);
+  const oai_sw_cfg_t c = cfg;
+  pthread_mutex_unlock(&cfg_lock);
+  return c;
+}
+
+static void oai_sw_cfg_account(uint32_t version, uint64_t t_start, uint64_t t_end, uint16_t nb_ops)
+{
+  pthread_mutex_lock(&cfg_lock);
+  aal_compute_stats_t *s = &cfg_stats[version % AAL_COMPUTE_STATS_VERSIONS];
+  if (s->version == version) {
+    if (s->t_first_burst_ns == 0)
+      s->t_first_burst_ns = t_start;
+    s->nb_bursts++;
+    s->nb_ops += nb_ops;
+    s->busy_ns += t_end - t_start;
+  }
+  pthread_mutex_unlock(&cfg_lock);
+}
+
+typedef struct {
+  struct rte_bbdev_dec_op **ops;
+  uint16_t nb_ops;
+  uint16_t batch;
+  _Atomic(uint32_t) next;
+  task_ans_t ans;
+} oai_sw_dec_burst_t;
+
+/* each task takes the next batch of code blocks until the burst is exhausted */
+static void oai_sw_dec_worker(void *arg)
+{
+  oai_sw_dec_burst_t *b = arg;
+  for (uint32_t first = atomic_fetch_add(&b->next, b->batch); first < b->nb_ops; first = atomic_fetch_add(&b->next, b->batch)) {
+    const uint32_t last = RTE_MIN(first + b->batch, (uint32_t)b->nb_ops);
+    for (uint32_t i = first; i < last; i++)
+      process_ldpc_dec(b->ops[i]);
+  }
+  completed_task_ans(&b->ans);
+}
+
+static void oai_sw_dec_parallel(struct rte_bbdev_dec_op **ops, uint16_t nb_ops, int workers, int batch)
+{
+  oai_sw_dec_burst_t b = {.ops = ops, .nb_ops = nb_ops, .batch = batch};
+  atomic_init(&b.next, 0);
+  const int nb_tasks = RTE_MIN(workers, (nb_ops + batch - 1) / batch);
+  init_task_ans(&b.ans, nb_tasks);
+  for (int t = 0; t < nb_tasks; t++)
+    pushTpool(&workers_pool, (task_t){.func = oai_sw_dec_worker, .args = &b});
+  join_task_ans(&b.ans);
+}
+#endif
+
 /* ------------------------------------------------------------------------ */
 /* Advertised capabilities                                                   */
 /* ------------------------------------------------------------------------ */
@@ -518,8 +755,21 @@ static uint16_t oai_sw_enqueue_ldpc_dec(struct rte_bbdev_queue_data *q_data, str
 {
   stats_dec_calls++;
   stats_dec_ops += nb_ops;
+#ifdef ENABLE_LDPC_AAL_EXT
+  /* the configuration in force when the burst starts applies to the whole burst */
+  const oai_sw_cfg_t c = oai_sw_cfg_snapshot();
+  const uint64_t t_start = oai_sw_now_ns();
+  if (c.values[OAI_SW_PARAM_MODE] == OAI_SW_MODE_PAR && nb_ops > 1) {
+    oai_sw_dec_parallel(ops, nb_ops, c.values[OAI_SW_PARAM_WORKERS], c.values[OAI_SW_PARAM_BATCH]);
+  } else {
+    for (uint16_t i = 0; i < nb_ops; i++)
+      process_ldpc_dec(ops[i]);
+  }
+  oai_sw_cfg_account(c.version, t_start, oai_sw_now_ns(), nb_ops);
+#else
   for (uint16_t i = 0; i < nb_ops; i++)
     process_ldpc_dec(ops[i]);
+#endif
   return ring_enqueue(q_data, (void **)ops, nb_ops);
 }
 
@@ -577,6 +827,9 @@ static int oai_sw_probe(struct rte_vdev_device *vdev)
   bbdev->enqueue_ldpc_enc_ops = oai_sw_enqueue_ldpc_enc;
   bbdev->dequeue_ldpc_enc_ops = oai_sw_dequeue_ldpc_enc;
 
+#ifdef ENABLE_LDPC_AAL_EXT
+  oai_sw_cfg_init();
+#endif
   OAI_SW_LOG("dispositivo %s criado (LDPC_ENC + LDPC_DEC, %u filas, HARQ interna)", name, priv->max_nb_queues);
   return 0;
 }
