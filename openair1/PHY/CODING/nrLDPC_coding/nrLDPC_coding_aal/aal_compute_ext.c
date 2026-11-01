@@ -15,15 +15,17 @@
  *   setAalAccelConfig limits=<file>
  *
  * setAalAccelConfig stands for the AALI-C-Mgmt path (IMS -> HAM): it loads the infrastructure limits, one
- * "<name> <min> <max>" line per parameter. The effective domain of a parameter is its descriptor domain
- * intersected with its limit; a value in force that falls outside a new limit is clamped to it.
+ * "<name> <min> <max>" line per parameter. The effective domain of a parameter is its descriptor domain (min, max,
+ * step) intersected with its limit; a limit that leaves the domain empty is rejected, and a value in force that falls
+ * outside a new limit is clamped to it.
  *
  * A set request is validated as a whole before anything is applied: either every value is applied, in one new
  * configuration version, or none is.
+ *
+ * The control thread serves one client at a time; a connection is closed once the client closes it.
  */
 
 #include "aal_compute_ext.h"
-#include "bbdev_oai_sw.h"
 
 #include <errno.h>
 #include <inttypes.h>
@@ -47,6 +49,7 @@
 #define AAL_EXT_LINE_MAX 1024
 #define AAL_EXT_RESPONSE_MAX 16384
 #define AAL_EXT_MAX_TOKENS 32
+#define AAL_EXT_MAX_LPUS 8
 /* period at which the control thread checks for shutdown while waiting on the socket */
 #define AAL_EXT_POLL_MS 100
 
@@ -58,6 +61,7 @@ typedef enum {
   AAL_EXT_OUT_OF_RANGE,
   AAL_EXT_LIMIT_EXCEEDED,
   AAL_EXT_VERSION_CONFLICT,
+  AAL_EXT_INTERNAL_ERROR,
 } aal_ext_status_t;
 
 static const char *const aal_ext_status_str[] = {
@@ -68,6 +72,7 @@ static const char *const aal_ext_status_str[] = {
     [AAL_EXT_OUT_OF_RANGE] = "OUT_OF_RANGE",
     [AAL_EXT_LIMIT_EXCEEDED] = "LIMIT_EXCEEDED",
     [AAL_EXT_VERSION_CONFLICT] = "VERSION_CONFLICT",
+    [AAL_EXT_INTERNAL_ERROR] = "INTERNAL_ERROR",
 };
 
 static const char *const aal_ext_type_str[] = {
@@ -95,6 +100,10 @@ typedef struct {
   int32_t max;
 } aal_ext_limit_t;
 
+/* written by LPU drivers from their load-time constructors, read by aal_compute_ext_init() */
+static const aal_compute_lpu_ops_t *registry[AAL_EXT_MAX_LPUS];
+static int nb_registered;
+
 /* only the control thread touches this state after aal_compute_ext_init() returns */
 static struct {
   const aal_compute_lpu_ops_t *lpu; /* NULL: the LPU publishes no runtime parameters */
@@ -106,26 +115,60 @@ static struct {
   atomic_bool stop;
 } ext = {.listen_fd = -1};
 
-static inline int32_t clamp_i32(int32_t v, int32_t lo, int32_t hi)
+int aal_compute_ext_register(const aal_compute_lpu_ops_t *ops)
 {
-  return v < lo ? lo : (v > hi ? hi : v);
+  if (ops == NULL || ops->lpu_handle == NULL || nb_registered == AAL_EXT_MAX_LPUS)
+    return -1;
+  for (int i = 0; i < nb_registered; i++)
+    if (strcmp(registry[i]->lpu_handle, ops->lpu_handle) == 0)
+      return -1;
+  registry[nb_registered++] = ops;
+  return 0;
+}
+
+static const aal_compute_lpu_ops_t *lpu_ops_for_driver(const char *driver_name)
+{
+  for (int i = 0; i < nb_registered; i++)
+    if (strcmp(registry[i]->lpu_handle, driver_name) == 0)
+      return registry[i];
+  return NULL;
 }
 
 typedef struct {
   char buf[AAL_EXT_RESPONSE_MAX];
   size_t len;
+  bool truncated;
 } aal_ext_json_t;
 
 static void json_append(aal_ext_json_t *j, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
 static void json_append(aal_ext_json_t *j, const char *fmt, ...)
 {
-  if (j->len >= sizeof(j->buf))
+  if (j->truncated)
     return;
   va_list ap;
   va_start(ap, fmt);
   const int n = vsnprintf(j->buf + j->len, sizeof(j->buf) - j->len, fmt, ap);
   va_end(ap);
-  j->len = (n < 0 || j->len + n >= sizeof(j->buf)) ? sizeof(j->buf) : j->len + n;
+  if (n < 0 || j->len + n >= sizeof(j->buf))
+    j->truncated = true;
+  else
+    j->len += n;
+}
+
+/* appends s as a JSON string; request tokens are echoed through here, so they cannot break the response */
+static void json_append_str(aal_ext_json_t *j, const char *s)
+{
+  json_append(j, "\"");
+  for (; *s != '\0'; s++) {
+    const unsigned char c = *s;
+    if (c == '"' || c == '\\')
+      json_append(j, "\\%c", c);
+    else if (c < 0x20)
+      json_append(j, "\\u%04x", c);
+    else
+      json_append(j, "%c", c);
+  }
+  json_append(j, "\"");
 }
 
 static int nb_params(void)
@@ -141,15 +184,40 @@ static int find_param(const char *name)
   return -1;
 }
 
-static void effective_domain(int i, int32_t *min, int32_t *max)
+static int32_t param_step(const aal_compute_param_t *p)
+{
+  return p->step > 1 ? p->step : 1;
+}
+
+/*
+ * Effective domain of parameter i under the limit lim: the values of the descriptor grid (min + k * step, up to max)
+ * that lie within lim. Returns false if no value is left.
+ */
+static bool domain_under_limit(int i, const aal_ext_limit_t *lim, int32_t *min, int32_t *max)
 {
   const aal_compute_param_t *p = &ext.lpu->params[i];
-  *min = p->min;
-  *max = p->max;
-  if (ext.limits[i].set) {
-    *min = ext.limits[i].min > *min ? ext.limits[i].min : *min;
-    *max = ext.limits[i].max < *max ? ext.limits[i].max : *max;
+  const int64_t step = param_step(p);
+  int64_t lo = p->min;
+  int64_t hi = p->max;
+  if (lim->set) {
+    if (lim->min > lo)
+      lo = p->min + (lim->min - p->min + step - 1) / step * step;
+    if (lim->max < hi)
+      hi = lim->max;
   }
+  hi = p->min + (hi - p->min) / step * step;
+  if (lo > hi)
+    return false;
+  *min = lo;
+  *max = hi;
+  return true;
+}
+
+static void effective_domain(int i, int32_t *min, int32_t *max)
+{
+  /* load_limits() only accepts limits that leave every domain non-empty */
+  const bool non_empty = domain_under_limit(i, &ext.limits[i], min, max);
+  DevAssert(non_empty);
 }
 
 static aal_ext_status_t parse_value(const aal_compute_param_t *p, const char *s, int32_t *value)
@@ -186,7 +254,7 @@ static aal_ext_status_t parse_value(const aal_compute_param_t *p, const char *s,
 static aal_ext_status_t check_value(int i, int32_t value)
 {
   const aal_compute_param_t *p = &ext.lpu->params[i];
-  if (value < p->min || value > p->max || (p->step > 1 && (value - p->min) % p->step != 0))
+  if (value < p->min || value > p->max || (value - p->min) % param_step(p) != 0)
     return AAL_EXT_OUT_OF_RANGE;
   int32_t min, max;
   effective_domain(i, &min, &max);
@@ -199,23 +267,37 @@ static void json_value(aal_ext_json_t *j, int i, int32_t value)
 {
   const aal_compute_param_t *p = &ext.lpu->params[i];
   if (p->type == AAL_COMPUTE_TYPE_ENUM)
-    json_append(j, "\"%s\"", p->enum_values[value]);
+    json_append_str(j, p->enum_values[value]);
   else if (p->type == AAL_COMPUTE_TYPE_BOOL)
     json_append(j, "%s", value ? "true" : "false");
   else
     json_append(j, "%d", value);
 }
 
+static bool parse_u32(const char *s, uint32_t *v)
+{
+  char *end;
+  errno = 0;
+  const unsigned long long x = strtoull(s, &end, 10);
+  if (errno != 0 || end == s || *end != '\0' || *s == '-' || x > UINT32_MAX)
+    return false;
+  *v = x;
+  return true;
+}
+
 /*
  * Validates every name=value token against the current values and, only if all are valid, applies them in one
- * version. On error, *bad_token points to the offending token.
+ * version. On error, *bad_token points to the offending token (its name, for name=value tokens).
  */
 static aal_ext_status_t set_config(char **tokens, int nb_tokens, const char **bad_token, uint32_t *version)
 {
   int32_t values[AAL_COMPUTE_MAX_PARAMS];
+  bool seen[AAL_COMPUTE_MAX_PARAMS] = {false};
+  int nb_values = 0;
   uint64_t t_applied_ns;
   const uint32_t current_version = ext.lpu ? ext.lpu->get(values, &t_applied_ns) : 0;
   *version = current_version;
+  *bad_token = "";
   for (int t = 0; t < nb_tokens; t++) {
     *bad_token = tokens[t];
     char *eq = strchr(tokens[t], '=');
@@ -225,13 +307,19 @@ static aal_ext_status_t set_config(char **tokens, int nb_tokens, const char **ba
     const char *name = tokens[t];
     const char *s = eq + 1;
     if (strcmp(name, "expected_version") == 0) {
-      if (strtoul(s, NULL, 10) != current_version)
+      uint32_t expected;
+      if (!parse_u32(s, &expected))
+        return AAL_EXT_BAD_REQUEST;
+      if (expected != current_version)
         return AAL_EXT_VERSION_CONFLICT;
       continue;
     }
     const int i = find_param(name);
     if (i < 0)
       return AAL_EXT_UNKNOWN_PARAM;
+    if (seen[i])
+      return AAL_EXT_BAD_REQUEST;
+    seen[i] = true;
     int32_t v;
     aal_ext_status_t st = parse_value(&ext.lpu->params[i], s, &v);
     if (st == AAL_EXT_OK)
@@ -239,14 +327,20 @@ static aal_ext_status_t set_config(char **tokens, int nb_tokens, const char **ba
     if (st != AAL_EXT_OK)
       return st;
     values[i] = v;
+    nb_values++;
   }
+  /* a request that changes nothing does not create a version */
+  if (nb_values == 0)
+    return AAL_EXT_BAD_REQUEST;
   *bad_token = NULL;
-  if (ext.lpu)
-    *version = ext.lpu->apply(values);
+  *version = ext.lpu->apply(values);
   return AAL_EXT_OK;
 }
 
-/* Loads "<name> <min> <max>" lines; the limits replace the previous ones only if the whole file is valid. */
+/*
+ * Loads "<name> <min> <max>" lines; the limits replace the previous ones only if the whole file is valid and leaves
+ * every parameter with a non-empty effective domain.
+ */
 static int load_limits(const char *path)
 {
   FILE *f = fopen(path, "r");
@@ -269,12 +363,15 @@ static int load_limits(const char *path)
     if (n <= 0)
       continue;
     const int i = find_param(name);
-    if (n != 3 || i < 0 || min > max) {
-      LOG_E(NR_PHY, "AAL compute extension: %s:%d: invalid limit \"%s\"\n", path, line_nb, name);
+    int32_t emin, emax;
+    if (n != 3 || i < 0 || min > max || min < INT32_MIN || max > INT32_MAX)
       ret = -1;
-      break;
-    }
-    limits[i] = (aal_ext_limit_t){.set = true, .min = min, .max = max};
+    else if (!domain_under_limit(i, &(aal_ext_limit_t){.set = true, .min = min, .max = max}, &emin, &emax))
+      ret = -1; /* the limit excludes every value the LPU accepts */
+    else
+      limits[i] = (aal_ext_limit_t){.set = true, .min = min, .max = max};
+    if (ret != 0)
+      LOG_E(NR_PHY, "AAL compute extension: %s:%d: invalid limit\n", path, line_nb);
   }
   fclose(f);
   if (ret == 0)
@@ -292,9 +389,11 @@ static int clamp_to_limits(uint32_t *version, aal_ext_json_t *adjusted)
   for (int i = 0; i < nb_params(); i++) {
     int32_t min, max;
     effective_domain(i, &min, &max);
-    const int32_t v = clamp_i32(values[i], min, max);
+    /* min and max lie on the descriptor grid, so the clamped value is a valid one */
+    const int32_t v = values[i] < min ? min : (values[i] > max ? max : values[i]);
     if (v != values[i]) {
-      json_append(adjusted, "%s\"%s\"", nb_adjusted ? "," : "", ext.lpu->params[i].name);
+      json_append(adjusted, "%s", nb_adjusted ? "," : "");
+      json_append_str(adjusted, ext.lpu->params[i].name);
       values[i] = v;
       nb_adjusted++;
     }
@@ -306,32 +405,38 @@ static int clamp_to_limits(uint32_t *version, aal_ext_json_t *adjusted)
 
 static void op_get_capabilities(aal_ext_json_t *r)
 {
-  json_append(r,
-              ",\"status\":\"OK\",\"aal_lpu_handle\":\"%s\",\"descriptor_version\":%u,\"params\":[",
-              ext.lpu ? ext.lpu->lpu_handle : "",
-              ext.descriptor_version);
+  json_append(r, ",\"status\":\"OK\",\"aal_lpu_handle\":");
+  json_append_str(r, ext.lpu ? ext.lpu->lpu_handle : "");
+  json_append(r, ",\"descriptor_version\":%u,\"params\":[", ext.descriptor_version);
   for (int i = 0; i < nb_params(); i++) {
     const aal_compute_param_t *p = &ext.lpu->params[i];
     int32_t min, max;
     effective_domain(i, &min, &max);
-    json_append(r, "%s{\"name\":\"%s\",\"type\":\"%s\"", i ? "," : "", p->name, aal_ext_type_str[p->type]);
+    json_append(r, "%s{\"name\":", i ? "," : "");
+    json_append_str(r, p->name);
+    json_append(r, ",\"type\":\"%s\"", aal_ext_type_str[p->type]);
     if (p->type == AAL_COMPUTE_TYPE_ENUM) {
       json_append(r, ",\"values\":[");
-      for (int k = min; k <= max; k++)
-        json_append(r, "%s\"%s\"", k > min ? "," : "", p->enum_values[k]);
+      for (int k = min; k <= max; k++) {
+        json_append(r, "%s", k > min ? "," : "");
+        json_append_str(r, p->enum_values[k]);
+      }
       json_append(r, "]");
     } else if (p->type == AAL_COMPUTE_TYPE_INT) {
-      json_append(r, ",\"min\":%d,\"max\":%d,\"step\":%d", min, max, p->step);
+      json_append(r, ",\"min\":%d,\"max\":%d,\"step\":%d", min, max, param_step(p));
     }
     json_append(r, ",\"default\":");
     json_value(r, i, p->default_value);
-    if (p->unit != NULL && p->unit[0] != '\0')
-      json_append(r, ",\"unit\":\"%s\"", p->unit);
+    if (p->unit != NULL && p->unit[0] != '\0') {
+      json_append(r, ",\"unit\":");
+      json_append_str(r, p->unit);
+    }
     json_append(r,
-                ",\"category\":\"%s\",\"scope\":\"%s\",\"description\":\"%s\"}",
+                ",\"category\":\"%s\",\"scope\":\"%s\",\"description\":",
                 aal_ext_category_str[p->category],
-                aal_ext_scope_str[p->scope],
-                p->description);
+                aal_ext_scope_str[p->scope]);
+    json_append_str(r, p->description != NULL ? p->description : "");
+    json_append(r, "}");
   }
   json_append(r, "]");
 }
@@ -343,7 +448,9 @@ static void op_get_config(aal_ext_json_t *r)
   const uint32_t version = ext.lpu ? ext.lpu->get(values, &t_applied_ns) : 0;
   json_append(r, ",\"status\":\"OK\",\"version\":%u,\"t_applied_ns\":%" PRIu64 ",\"values\":{", version, t_applied_ns);
   for (int i = 0; i < nb_params(); i++) {
-    json_append(r, "%s\"%s\":", i ? "," : "", ext.lpu->params[i].name);
+    json_append(r, "%s", i ? "," : "");
+    json_append_str(r, ext.lpu->params[i].name);
+    json_append(r, ":");
     json_value(r, i, values[i]);
   }
   json_append(r, "}");
@@ -376,17 +483,15 @@ static void op_set_config(char **tokens, int nb_tokens, aal_ext_json_t *r)
   uint32_t version;
   const aal_ext_status_t st = set_config(tokens, nb_tokens, &bad_token, &version);
   json_append(r, ",\"status\":\"%s\",\"version\":%u", aal_ext_status_str[st], version);
-  if (st != AAL_EXT_OK)
-    json_append(r, ",\"param\":\"%s\"", bad_token);
+  if (st != AAL_EXT_OK) {
+    json_append(r, ",\"param\":");
+    json_append_str(r, bad_token);
+  }
 }
 
 static void op_set_accel_config(char **tokens, int nb_tokens, aal_ext_json_t *r)
 {
-  if (nb_tokens != 1 || strncmp(tokens[0], "limits=", strlen("limits=")) != 0) {
-    json_append(r, ",\"status\":\"%s\"", aal_ext_status_str[AAL_EXT_BAD_REQUEST]);
-    return;
-  }
-  if (load_limits(tokens[0] + strlen("limits=")) != 0) {
+  if (nb_tokens != 1 || strncmp(tokens[0], "limits=", strlen("limits=")) != 0 || load_limits(tokens[0] + strlen("limits=")) != 0) {
     json_append(r, ",\"status\":\"%s\"", aal_ext_status_str[AAL_EXT_BAD_REQUEST]);
     return;
   }
@@ -406,14 +511,20 @@ static void handle_request(char *line, aal_ext_json_t *r)
   char *tokens[AAL_EXT_MAX_TOKENS];
   int nb_tokens = 0;
   char *save;
-  for (char *t = strtok_r(line, " \t\r", &save); t != NULL && nb_tokens < AAL_EXT_MAX_TOKENS; t = strtok_r(NULL, " \t\r", &save))
+  for (char *t = strtok_r(line, " \t\r", &save); t != NULL; t = strtok_r(NULL, " \t\r", &save)) {
+    if (nb_tokens == AAL_EXT_MAX_TOKENS) {
+      json_append(r, "{\"op\":\"\",\"status\":\"%s\"}\n", aal_ext_status_str[AAL_EXT_BAD_REQUEST]);
+      return;
+    }
     tokens[nb_tokens++] = t;
+  }
   if (nb_tokens == 0) {
-    json_append(r, "{\"op\":\"\",\"status\":\"%s\"}", aal_ext_status_str[AAL_EXT_BAD_REQUEST]);
+    json_append(r, "{\"op\":\"\",\"status\":\"%s\"}\n", aal_ext_status_str[AAL_EXT_BAD_REQUEST]);
     return;
   }
   const char *op = tokens[0];
-  json_append(r, "{\"op\":\"%s\"", op);
+  json_append(r, "{\"op\":");
+  json_append_str(r, op);
   if (strcmp(op, "getAalLpuComputeCapabilities") == 0 && nb_tokens == 1)
     op_get_capabilities(r);
   else if (strcmp(op, "setAalLpuComputeConfig") == 0)
@@ -443,6 +554,21 @@ static bool wait_readable(int fd)
   return false;
 }
 
+/* MSG_NOSIGNAL: a client that closes early must not raise SIGPIPE, whose default action ends the whole process */
+static bool send_all(int fd, const char *buf, size_t len)
+{
+  while (len > 0) {
+    const ssize_t n = send(fd, buf, len, MSG_NOSIGNAL);
+    if (n < 0 && errno == EINTR)
+      continue;
+    if (n <= 0)
+      return false;
+    buf += n;
+    len -= n;
+  }
+  return true;
+}
+
 static void serve_client(int fd)
 {
   char line[AAL_EXT_LINE_MAX];
@@ -455,9 +581,15 @@ static void serve_client(int fd)
     char *nl;
     while ((nl = memchr(line, '\n', len)) != NULL) {
       *nl = '\0';
-      aal_ext_json_t r = {0};
+      static aal_ext_json_t r; /* 16 KiB, only used by the control thread */
+      r = (aal_ext_json_t){0};
       handle_request(line, &r);
-      if (write(fd, r.buf, r.len) != (ssize_t)r.len)
+      if (r.truncated) {
+        LOG_E(NR_PHY, "AAL compute extension: response longer than %d bytes\n", AAL_EXT_RESPONSE_MAX);
+        r = (aal_ext_json_t){0};
+        json_append(&r, "{\"op\":\"\",\"status\":\"%s\"}\n", aal_ext_status_str[AAL_EXT_INTERNAL_ERROR]);
+      }
+      if (!send_all(fd, r.buf, r.len))
         return;
       len -= nl + 1 - line;
       memmove(line, nl + 1, len);
@@ -509,20 +641,24 @@ static int start_ctl_socket(const char *path)
   return 0;
 }
 
-static const aal_compute_lpu_ops_t *lpu_ops_for_driver(const char *driver_name)
-{
-  const aal_compute_lpu_ops_t *oai_sw = oai_sw_compute_ops();
-  if (strcmp(driver_name, oai_sw->lpu_handle) == 0)
-    return oai_sw;
-  return NULL;
-}
-
 int aal_compute_ext_init(const char *driver_name, const char *ctl_sock, const char *limits_file, const char *initial_config)
 {
   ext.lpu = lpu_ops_for_driver(driver_name);
   ext.descriptor_version = 1;
-  if (ext.lpu != NULL)
+  memset(ext.limits, 0, sizeof(ext.limits));
+  if (ext.lpu != NULL) {
     AssertFatal(ext.lpu->nb_params <= AAL_COMPUTE_MAX_PARAMS, "%s publishes too many parameters\n", driver_name);
+    for (int i = 0; i < ext.lpu->nb_params; i++) {
+      const aal_compute_param_t *p = &ext.lpu->params[i];
+      const int32_t hi = p->type == AAL_COMPUTE_TYPE_ENUM ? p->nb_enum_values - 1 : (p->type == AAL_COMPUTE_TYPE_BOOL ? 1 : p->max);
+      AssertFatal(p->min <= p->max && p->min >= (p->type == AAL_COMPUTE_TYPE_INT ? INT32_MIN : 0) && p->max <= hi
+                      && p->default_value >= p->min && p->default_value <= p->max
+                      && (p->default_value - p->min) % param_step(p) == 0,
+                  "%s: inconsistent descriptor for %s\n",
+                  driver_name,
+                  p->name);
+    }
+  }
 
   if (limits_file != NULL && limits_file[0] != '\0') {
     if (load_limits(limits_file) != 0)
@@ -544,7 +680,10 @@ int aal_compute_ext_init(const char *driver_name, const char *ctl_sock, const ch
     uint32_t version;
     const aal_ext_status_t st = set_config(tokens, nb_tokens, &bad_token, &version);
     if (st != AAL_EXT_OK) {
-      LOG_E(NR_PHY, "AAL compute extension: initial configuration rejected: %s (%s)\n", aal_ext_status_str[st], bad_token);
+      LOG_E(NR_PHY,
+            "AAL compute extension: initial configuration rejected: %s (%s)\n",
+            aal_ext_status_str[st],
+            bad_token != NULL ? bad_token : "");
       return -1;
     }
   }

@@ -132,9 +132,10 @@ If so, this has to be handled separately by using TB mode.
 
 ### Compute Extension (runtime execution parameters)
 
-With `-DENABLE_LDPC_AAL_EXT=ON` (default), the LPU can publish runtime execution parameters: a typed descriptor
+With `-DENABLE_LDPC_AAL_EXT=ON` (default `OFF`), the LPU can publish runtime execution parameters: a typed descriptor
 (name, type, domain, default, unit, category, scope), see `aal_compute_ext.h`. The AAL Implementation
-(`aal_compute_ext.c`) intersects the descriptor with the infrastructure limits and serves the operations on a UNIX
+(`aal_compute_ext.c`) finds the descriptor of the bbdev driver in use among those registered with
+`aal_compute_ext_register()`, intersects it with the infrastructure limits and serves the operations on a UNIX
 socket, one request per line and one JSON object per response:
 
 | Request | Function |
@@ -143,17 +144,26 @@ socket, one request per line and one JSON object per response:
 | `setAalLpuComputeConfig [expected_version=<v>] <name>=<value> ...` | validates all values, then applies them as one new configuration version |
 | `getAalLpuComputeConfig` | values in force, version, time of application |
 | `getAalLpuComputeStats` | bursts, ops and processing time per configuration version |
-| `setAalAccelConfig limits=<file>` | loads the infrastructure limits (`<name> <min> <max>` per line); values in force outside them are clamped |
+| `setAalAccelConfig limits=<file>` | loads the infrastructure limits (`<name> <min> <max>` per line); a limit that leaves no valid value is rejected, values in force outside the limits are clamped |
 
-A new configuration takes effect at the next burst. A device without the extension publishes an empty descriptor.
+Every response carries `status`: `OK`, `BAD_REQUEST`, `UNKNOWN_PARAM`, `INVALID_TYPE`, `OUT_OF_RANGE`,
+`LIMIT_EXCEEDED`, `VERSION_CONFLICT` or `INTERNAL_ERROR`. A set request is applied entirely or not at all; a request
+with no parameter, or with the same parameter twice, is a `BAD_REQUEST`.
+
+A new configuration takes effect at the next burst. A driver that does not register publishes an empty descriptor.
+The control thread serves one client at a time. The socket is created with mode 0666, since the process runs as root
+for DPDK: any local user can use it, which suits a test setup only.
 `baseband_oai_sw` publishes `oai_sw.mode` (`seq`, `par`), `oai_sw.workers` (1..16) and `oai_sw.batch` (1..64):
 in `par`, the code blocks of a decoding burst are processed by `oai_sw.workers` tasks of a thread pool, each taking
-`oai_sw.batch` code blocks at a time.
+`oai_sw.batch` code blocks at a time. The pool (16 threads) is created when the device is probed, on the CPUs of
+the process outside the EAL lcores, and exists even in `seq`.
 
 Options, in the `nrLDPC_coding_aal` section:
 - `ctl_sock`: socket path (default `/tmp/aal_ext.sock`)
 - `limits`: infrastructure limits file, loaded at startup
 - `compute`: initial configuration, e.g. `oai_sw.mode=par,oai_sw.workers=4`
+
+Unit test (`-DENABLE_TESTS=ON`, no DPDK needed): `ctest -R test_aal_compute_ext`.
 
 ### Future Work(s)
 

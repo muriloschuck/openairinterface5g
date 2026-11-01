@@ -21,10 +21,13 @@ if (ENABLE_LDPC_AAL)
   add_library(ldpc_aal MODULE nrLDPC_coding_aal.c bbdev_oai_sw.c)
 
   # runtime execution parameters published by the LPU (aal_compute_ext.h); OFF builds the plain AAL adapter
-  add_boolean_option(ENABLE_LDPC_AAL_EXT ON "Build the AAL compute extension (runtime execution parameters of the LPU)" OFF)
+  add_boolean_option(ENABLE_LDPC_AAL_EXT OFF "Build the AAL compute extension (runtime execution parameters of the LPU)" OFF)
   if (ENABLE_LDPC_AAL_EXT)
     target_sources(ldpc_aal PRIVATE aal_compute_ext.c)
     target_compile_definitions(ldpc_aal PRIVATE ENABLE_LDPC_AAL_EXT)
+    if (ENABLE_TESTS)
+      add_subdirectory(tests)
+    endif()
   endif()
 
   set_target_properties(ldpc_aal PROPERTIES COMPILE_FLAGS "-DALLOW_EXPERIMENTAL_API -DALLOW_INTERNAL_API")

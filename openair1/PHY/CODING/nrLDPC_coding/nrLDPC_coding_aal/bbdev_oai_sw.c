@@ -1,3 +1,8 @@
+/* SPDX-License-Identifier: BSD-3-Clause
+ * Copyright(c) 2017 Intel Corporation
+ * Copyright(c) 2026 Murilo Schuck
+ */
+
 /*
  * baseband_oai_sw: software BBDev virtual device (vdev) acting as an LDPC LPU behind the DPDK BBDev API,
  * so that libldpc_aal.so (nrLDPC_coding_aal.c) runs without an FPGA.
@@ -13,6 +18,9 @@
  *        output (K-F)/8 bytes, or (K-F-24)/8 with CRC_TYPE_24B_DROP, MSB first.
  *   HARQ: internal device memory (advertised in the capabilities); the slot is
  *        harq_combined_output.offset / LDPC_MAX_CB_SIZE, as nrLDPC_coding_aal.c lays out internal memory.
+ *
+ * The control path (device info, queue setup, ring-based enqueue/dequeue, probe) is derived from the DPDK
+ * baseband_null driver (drivers/baseband/null/bbdev_null.c).
  *
  * With ENABLE_LDPC_AAL_EXT, the device also publishes runtime execution parameters (aal_compute_ext.h): the code
  * blocks of a decoding burst are processed serially (oai_sw.mode=seq) or by oai_sw.workers tasks of an OAI thread
@@ -41,9 +49,9 @@
 #include <rte_bbdev.h>
 #include <rte_bbdev_pmd.h>
 
-#include "nrLDPC_coding_aal.h"            /* LDPC_MAX_CB_SIZE */
-#include "PHY/CODING/coding_defs.h"       /* crcType, lenWithCrc, check_crc, nr_get_R_ldpc_decoder */
-#include "PHY/CODING/nrLDPC_defs.h"       /* encoder_implemparams_t, LDPC_*func_t, t_nrLDPC_dec_params */
+#include "nrLDPC_coding_aal.h" /* LDPC_MAX_CB_SIZE */
+#include "PHY/CODING/coding_defs.h" /* crcType, lenWithCrc, check_crc, nr_get_R_ldpc_decoder */
+#include "PHY/CODING/nrLDPC_defs.h" /* encoder_implemparams_t, LDPC_*func_t, t_nrLDPC_dec_params */
 
 #ifdef ENABLE_LDPC_AAL_EXT
 #include <pthread.h>
@@ -53,7 +61,7 @@
 #include <rte_lcore.h>
 #include "common/utils/threadPool/thread-pool.h"
 #include "common/utils/threadPool/task_ans.h"
-#include "bbdev_oai_sw.h"
+#include "aal_compute_ext.h"
 #endif
 
 #define DRIVER_NAME baseband_oai_sw
@@ -66,6 +74,8 @@
 #define OAI_LDPC_DECODER_MAX_NUM_LLR 27000 /* same as the OAI decoder; >= 68*384 */
 #endif
 
+/* stderr rather than LOG_*: nr_ulsim does not print LOG_I, and these lines are the evidence of which device and
+ * kernels a run used */
 #define OAI_SW_LOG(fmt, ...) fprintf(stderr, "[OAI_SW] " fmt "\n", ##__VA_ARGS__)
 
 /* ------------------------------------------------------------------------ */
@@ -106,17 +116,17 @@ static int oai_sw_load_kernels(void)
 
   oai.handle = dlopen(path, RTLD_NOW | RTLD_LOCAL);
   if (oai.handle == NULL) {
-    OAI_SW_LOG("falha ao carregar %s: %s", path, dlerror());
+    OAI_SW_LOG("cannot load %s: %s", path, dlerror());
     return -1;
   }
 
-#define LOAD(field, name)                                       \
-  do {                                                          \
-    *(void **)(&oai.field) = dlsym(oai.handle, name);           \
-    if (oai.field == NULL) {                                    \
-      OAI_SW_LOG("símbolo %s ausente em %s", name, path);       \
-      return -1;                                                \
-    }                                                           \
+#define LOAD(field, name)                                \
+  do {                                                   \
+    *(void **)(&oai.field) = dlsym(oai.handle, name);    \
+    if (oai.field == NULL) {                             \
+      OAI_SW_LOG("symbol %s missing in %s", name, path); \
+      return -1;                                         \
+    }                                                    \
   } while (0)
   LOAD(encoder, "LDPCencoder");
   LOAD(decoder, "LDPCdecoder");
@@ -130,13 +140,13 @@ static int oai_sw_load_kernels(void)
   *(void **)(&oai.get_R) = dlsym(RTLD_DEFAULT, "nr_get_R_ldpc_decoder");
   *(void **)(&oai.check_crc) = dlsym(RTLD_DEFAULT, "check_crc");
   if (oai.check_crc == NULL) {
-    OAI_SW_LOG("símbolo check_crc não encontrado no processo");
+    OAI_SW_LOG("symbol check_crc not found in the process");
     return -1;
   }
   if (oai.get_R == NULL)
-    OAI_SW_LOG("aviso: nr_get_R_ldpc_decoder ausente; usando taxa mínima (todas as linhas do grafo)");
+    OAI_SW_LOG("warning: nr_get_R_ldpc_decoder missing; using the lowest rate (all rows of the graph)");
 
-  OAI_SW_LOG("núcleos carregados de %s", path);
+  OAI_SW_LOG("kernels loaded from %s", path);
   return 0;
 }
 
@@ -186,7 +196,7 @@ static inline void tbslbrm_from_ncb(uint32_t n_cb, uint8_t BG, uint16_t Z, uint3
       *T = t;
       return;
     }
-  OAI_SW_LOG("aviso: n_cb=%u sem Tbslbrm equivalente; usando Ncb=N", n_cb);
+  OAI_SW_LOG("warning: n_cb=%u has no matching Tbslbrm; using Ncb=N", n_cb);
   *C = 1;
 }
 
@@ -441,10 +451,12 @@ typedef struct {
 
 /* cfg and cfg_stats are written by the control thread (apply) and read by the data path (one snapshot per burst) */
 static pthread_mutex_t cfg_lock = PTHREAD_MUTEX_INITIALIZER;
-static oai_sw_cfg_t cfg = {.values = {OAI_SW_MODE_SEQ, 1, 1}, .version = 1};
+static oai_sw_cfg_t cfg; /* values set from the descriptor defaults in oai_sw_cfg_init() */
 static aal_compute_stats_t cfg_stats[AAL_COMPUTE_STATS_VERSIONS];
-/* created at probe, so that switching to par at runtime does not pay for thread creation */
+/* created at probe, so that switching to par at runtime does not pay for thread creation; OAI_SW_MAX_WORKERS threads
+ * exist even in seq, at the thread pool's real-time priority when the process may set it */
 static tpool_t workers_pool;
+static bool workers_pool_ready;
 
 static uint64_t oai_sw_now_ns(void)
 {
@@ -460,19 +472,19 @@ static void cfg_stats_open(void)
       (aal_compute_stats_t){.version = cfg.version, .t_applied_ns = cfg.t_applied_ns};
 }
 
-/* CPUs the process could use before rte_eal_init() pinned the main thread to its lcore; the constructor runs when
- * libldpc_aal.so is loaded, before the adapter initializes EAL */
-static cpu_set_t process_cpus;
-RTE_INIT(oai_sw_save_process_cpus)
+/* affinity of the thread that loads libldpc_aal.so, taken before rte_eal_init() pins the calling thread to the main
+ * lcore; in the OAI executables the library is loaded by the main thread, so this is the CPU set given to the process */
+static cpu_set_t loader_cpus;
+RTE_INIT(oai_sw_save_loader_cpus)
 {
-  if (sched_getaffinity(0, sizeof(process_cpus), &process_cpus) != 0)
-    CPU_ZERO(&process_cpus);
+  if (sched_getaffinity(0, sizeof(loader_cpus), &loader_cpus) != 0)
+    CPU_ZERO(&loader_cpus);
 }
 
-/* worker CPUs: the process CPUs minus the EAL lcores, the same rule EAL applies to its own control threads */
+/* worker CPUs: the loader CPUs minus the EAL lcores, the same rule EAL applies to its own control threads */
 static void workers_cpuset(cpu_set_t *set)
 {
-  *set = process_cpus;
+  *set = loader_cpus;
   unsigned int lcore;
   RTE_LCORE_FOREACH(lcore)
   {
@@ -482,17 +494,19 @@ static void workers_cpuset(cpu_set_t *set)
         CPU_CLR(c, set);
   }
   if (CPU_COUNT(set) == 0) /* no CPU left outside the lcores: share them */
-    *set = process_cpus;
+    *set = loader_cpus;
 }
 
 static void oai_sw_cfg_init(void)
 {
+  if (workers_pool_ready)
+    return;
   /* this runs inside rte_eal_init() on the main lcore, and tpool threads inherit the affinity of their creator:
    * without this, every worker would be pinned to the main lcore */
   cpu_set_t workers, self;
   workers_cpuset(&workers);
-  char list[3 * CPU_SETSIZE] = "";
-  for (int c = 0, n = 0; c < CPU_SETSIZE; c++)
+  char list[256] = "";
+  for (int c = 0, n = 0; c < CPU_SETSIZE && n < (int)sizeof(list) - 8; c++)
     if (CPU_ISSET(c, &workers))
       n += snprintf(list + n, sizeof(list) - n, "%s%d", n ? "," : "", c);
   const bool pinned = CPU_COUNT(&workers) > 0 && pthread_getaffinity_np(pthread_self(), sizeof(self), &self) == 0
@@ -500,8 +514,12 @@ static void oai_sw_cfg_init(void)
   initFloatingCoresTpool(OAI_SW_MAX_WORKERS, &workers_pool, false, "oai_sw_dec");
   if (pinned)
     pthread_setaffinity_np(pthread_self(), sizeof(self), &self);
-  OAI_SW_LOG("%d workers, CPUs %s", OAI_SW_MAX_WORKERS, pinned ? list : "herdadas (afinidade não alterada)");
+  workers_pool_ready = true;
+  OAI_SW_LOG("worker pool: %d threads, CPUs %s", OAI_SW_MAX_WORKERS, pinned ? list : "inherited (affinity unchanged)");
   pthread_mutex_lock(&cfg_lock);
+  for (int i = 0; i < OAI_SW_NB_PARAMS; i++)
+    cfg.values[i] = oai_sw_params[i].default_value;
+  cfg.version = 1;
   cfg.t_applied_ns = oai_sw_now_ns();
   cfg_stats_open();
   pthread_mutex_unlock(&cfg_lock);
@@ -551,9 +569,11 @@ static const aal_compute_lpu_ops_t oai_sw_compute = {
     .get_stats = oai_sw_compute_get_stats,
 };
 
-const aal_compute_lpu_ops_t *oai_sw_compute_ops(void)
+/* the AAL Implementation finds these parameters by driver name, without depending on this driver */
+RTE_INIT(oai_sw_compute_register)
 {
-  return &oai_sw_compute;
+  if (aal_compute_ext_register(&oai_sw_compute) != 0)
+    OAI_SW_LOG("cannot register the runtime parameters of %s", oai_sw_compute.lpu_handle);
 }
 
 static oai_sw_cfg_t oai_sw_cfg_snapshot(void)
@@ -695,7 +715,7 @@ static int oai_sw_queue_setup(struct rte_bbdev *dev, uint16_t q_id, const struct
   }
 
   dev->data->queues[q_id].queue_private = q;
-  OAI_SW_LOG("fila %u configurada (op_type=%s, tamanho=%u)", q_id, rte_bbdev_op_type_str(conf->op_type), conf->queue_size);
+  OAI_SW_LOG("queue %u configured (op_type=%s, size=%u)", q_id, rte_bbdev_op_type_str(conf->op_type), conf->queue_size);
   return 0;
 }
 
@@ -723,7 +743,7 @@ static const struct rte_bbdev_ops oai_sw_ops = {
 static uint64_t stats_dec_calls, stats_dec_ops, stats_enc_calls, stats_enc_ops;
 static void stats_report(void)
 {
-  OAI_SW_LOG("resumo: DEC %lu chamadas / %lu ops | ENC %lu chamadas / %lu ops",
+  OAI_SW_LOG("summary: DEC %lu calls / %lu ops | ENC %lu calls / %lu ops",
              stats_dec_calls,
              stats_dec_ops,
              stats_enc_calls,
@@ -830,7 +850,7 @@ static int oai_sw_probe(struct rte_vdev_device *vdev)
 #ifdef ENABLE_LDPC_AAL_EXT
   oai_sw_cfg_init();
 #endif
-  OAI_SW_LOG("dispositivo %s criado (LDPC_ENC + LDPC_DEC, %u filas, HARQ interna)", name, priv->max_nb_queues);
+  OAI_SW_LOG("device %s created (LDPC_ENC + LDPC_DEC, %u queues, internal HARQ)", name, priv->max_nb_queues);
   return 0;
 }
 
@@ -842,6 +862,12 @@ static int oai_sw_remove(struct rte_vdev_device *vdev)
   struct rte_bbdev *bbdev = rte_bbdev_get_named_dev(name);
   if (bbdev == NULL)
     return -EINVAL;
+#ifdef ENABLE_LDPC_AAL_EXT
+  if (workers_pool_ready) {
+    abortTpool(&workers_pool);
+    workers_pool_ready = false;
+  }
+#endif
   rte_free(bbdev->data->dev_private);
   return rte_bbdev_release(bbdev);
 }

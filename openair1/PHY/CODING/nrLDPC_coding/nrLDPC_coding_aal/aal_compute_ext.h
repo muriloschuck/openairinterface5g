@@ -7,9 +7,9 @@
  *
  * The LPU describes the parameters it accepts while its queues keep running (a typed descriptor), the AAL
  * Implementation intersects that descriptor with the limits set by the infrastructure (IMS -> HAM) and validates
- * requests generically, by type and range, without knowing what a parameter means. An LPU driver that does not
- * implement aal_compute_lpu_ops_t publishes an empty descriptor, so applications that ignore the extension keep
- * working unchanged.
+ * requests generically, by type and range, without knowing what a parameter means. An LPU driver takes part by
+ * registering an aal_compute_lpu_ops_t; a driver that does not register publishes an empty descriptor, so
+ * applications that ignore the extension keep working unchanged.
  */
 
 #ifndef AAL_COMPUTE_EXT_H
@@ -73,6 +73,7 @@ typedef struct {
  * finishes with the configuration it started with.
  */
 typedef struct {
+  /* must equal the bbdev driver name (rte_bbdev_info.drv.driver_name): the AAL Implementation looks the LPU up by it */
   const char *lpu_handle;
   int nb_params;
   const aal_compute_param_t *params;
@@ -83,6 +84,13 @@ typedef struct {
   /* fills up to max entries, most recent version first, and returns how many were filled */
   int (*get_stats)(aal_compute_stats_t *stats, int max);
 } aal_compute_lpu_ops_t;
+
+/*
+ * Registers the runtime parameters of an LPU driver; called by the driver when its library is loaded (RTE_INIT), so
+ * the AAL Implementation needs no knowledge of the driver. Returns 0, or -1 if the registry is full or the handle is
+ * already registered.
+ */
+int aal_compute_ext_register(const aal_compute_lpu_ops_t *ops);
 
 /*
  * Starts the extension for the bbdev driven by driver_name: applies the infrastructure limits (limits_file, may be
