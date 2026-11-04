@@ -1,0 +1,4 @@
+config,dur_media_us,dur_p90_us,dur_p99_us,soma_dur_media_us,fase_media_us,ate_max_media_us,partida_6a_thread_med_us,partida_6a_thread_media_us
+w4b1,84.1,130.7,187.5,2018.6,680.2,52.6,nan,nan
+w6b1,99.5,175.6,199.1,2388.0,584.4,103.9,114.7,103.8
+w16b1,88.5,126.1,152.4,2121.9,518.3,80.8,80.9,80.1

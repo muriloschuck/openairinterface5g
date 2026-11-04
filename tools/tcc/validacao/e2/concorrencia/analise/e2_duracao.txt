@@ -1,0 +1,7 @@
+W1_c0.probe: chamadas=600 min=35.3us mediana=36.7us p99=70.4us max=164.4us >1ms=0 >100ms=0
+W1_c3.probe: chamadas=600 min=52.4us mediana=87.6us p99=409.8us max=422.1us >1ms=0 >100ms=0
+W3_c0.probe: chamadas=4800 min=40.1us mediana=41.0us p99=60.3us max=2495.3us >1ms=1 >100ms=0
+W3_c1.probe: chamadas=4800 min=40.0us mediana=43.2us p99=86.4us max=2523.7us >1ms=1 >100ms=0
+W3_c3.probe: chamadas=4800 min=40.1us mediana=66.6us p99=178.1us max=535.7us >1ms=0 >100ms=0
+W3_c5.probe: chamadas=4800 min=39.1us mediana=44.9us p99=95.3us max=374.1us >1ms=0 >100ms=0
+W3_c6.probe: chamadas=4800 min=53.7us mediana=79.3us p99=156.2us max=427.8us >1ms=0 >100ms=0

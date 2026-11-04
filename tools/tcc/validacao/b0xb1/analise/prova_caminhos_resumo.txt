@@ -1,0 +1,101 @@
+== E0/E4: n_errors de cada execução
+b0_sem_gdb.txt:SNR 5.400000: n_errors (8/20,0/8,0/0,0/0) (negative CRC), false_positive 0/20, errors_scrambling (25720/585120,10343/234048,0/0,0/0)
+b1_sem_gdb.txt:SNR 5.400000: n_errors (8/20,0/8,0/0,0/0) (negative CRC), false_positive 0/20, errors_scrambling (25720/585120,10343/234048,0/0,0/0)
+b0_conta.txt:SNR 5.400000: n_errors (8/20,0/8,0/0,0/0) (negative CRC), false_positive 0/20, errors_scrambling (25720/585120,10343/234048,0/0,0/0)
+b1_conta.txt:SNR 5.400000: n_errors (8/20,0/8,0/0,0/0) (negative CRC), false_positive 0/20, errors_scrambling (25720/585120,10343/234048,0/0,0/0)
+b0_mutado.txt:SNR 5.400000: n_errors (8/20,0/8,0/0,0/0) (negative CRC), false_positive 0/20, errors_scrambling (25720/585120,10343/234048,0/0,0/0)
+b1_mutado.txt:SNR 5.400000: n_errors (20/20,20/20,20/20,20/20) (negative CRC), false_positive 0/20, errors_scrambling (26028/585120,25715/585120,25628/585120,25633/585120)
+== E1: pilhas da 1ª chamada (B0 e B1)
+##### b0_conta
+=== PILHA da 1a chamada a LDPCencoder (thread 1) ===
+#0  LDPCencoder () at openair1/PHY/CODING/nrLDPC_encoder/ldpc_encoder_optim8segmulti.c:30
+#1  0x00007ffff61a5f15 in ldpc8blocks () at openair1/PHY/CODING/nrLDPC_coding/nrLDPC_coding_segment/nrLDPC_coding_segment_encoder.c:221
+#2  0x00007ffff61a7f2e in nrLDPC_launch_TB_encoding () at openair1/PHY/CODING/nrLDPC_coding/nrLDPC_coding_segment/nrLDPC_coding_segment_encoder.c:350
+#3  nrLDPC_coding_encoder () at openair1/PHY/CODING/nrLDPC_coding/nrLDPC_coding_segment/nrLDPC_coding_segment_encoder.c:398
+#4  0x0000555555d99a1c in nr_ulsch_encoding () at openair1/PHY/NR_UE_TRANSPORT/nr_ulsch_coding.c:134
+#5  0x0000555555d841de in nr_ue_ulsch_procedures () at openair1/PHY/NR_UE_TRANSPORT/nr_ulsch_ue.c:912
+#6  0x0000555555afcd7d in phy_procedures_nrUE_TX () at openair1/SCHED_NR_UE/phy_procedures_nr_ue.c:346
+#7  0x0000555555a8a97d in main () at openair1/SIMULATION/NR_PHY/ulsim.c:1337
+=== PILHA da 1a chamada a LDPCdecoder (thread 1) ===
+#0  LDPCdecoder () at openair1/PHY/CODING/nrLDPC_decoder/nrLDPC_decoder.c:63
+#1  0x00007ffff61a4bf5 in nr_process_decode_segment () at openair1/PHY/CODING/nrLDPC_coding/nrLDPC_coding_segment/nrLDPC_coding_segment_decoder.c:186
+#2  0x00007ffff61a5434 in nrLDPC_prepare_TB_decoding () at openair1/PHY/CODING/nrLDPC_coding/nrLDPC_coding_segment/nrLDPC_coding_segment_decoder.c:258
+#3  0x00007ffff61a5af4 in nrLDPC_coding_decoder () at openair1/PHY/CODING/nrLDPC_coding/nrLDPC_coding_segment/nrLDPC_coding_segment_decoder.c:288
+#4  0x0000555555abe963 in nr_ulsch_decoding () at openair1/PHY/NR_TRANSPORT/nr_ulsch_decoding.c:286
+#5  0x0000555555af37b7 in nr_ulsch_procedures () at openair1/SCHED_NR/phy_procedures_nr_gNB.c:448
+#6  phy_procedures_gNB_uespec_RX () at openair1/SCHED_NR/phy_procedures_nr_gNB.c:1396
+#7  0x0000555555a89295 in main () at openair1/SIMULATION/NR_PHY/ulsim.c:1497
+LDPCdecoder in section .text of build/libldpc.so
+##### b1_conta
+=== PILHA da 1a chamada a LDPCencoder (thread 1) ===
+#0  LDPCencoder () at openair1/PHY/CODING/nrLDPC_encoder/ldpc_encoder_optim8segmulti.c:30
+#1  0x00007ffff62816cd in process_ldpc_enc () at openair1/PHY/CODING/nrLDPC_coding/nrLDPC_coding_aal/bbdev_oai_sw.c:260
+#2  0x00007ffff62817f1 in oai_sw_enqueue_ldpc_enc () at openair1/PHY/CODING/nrLDPC_coding/nrLDPC_coding_aal/bbdev_oai_sw.c:802
+#3  0x00007ffff62701cb in rte_bbdev_enqueue_ldpc_enc_ops () at /usr/local/include/rte_bbdev.h:632
+#4  pmd_lcore_ldpc_enc () at openair1/PHY/CODING/nrLDPC_coding/nrLDPC_coding_aal/nrLDPC_coding_aal.c:933
+#5  0x00007ffff6275d59 in start_pmd_enc () at openair1/PHY/CODING/nrLDPC_coding/nrLDPC_coding_aal/nrLDPC_coding_aal.c:1036
+#6  0x00007ffff627bad7 in nrLDPC_coding_encoder () at openair1/PHY/CODING/nrLDPC_coding/nrLDPC_coding_aal/nrLDPC_coding_aal.c:1406
+#7  0x0000555555d99a1c in nr_ulsch_encoding () at openair1/PHY/NR_UE_TRANSPORT/nr_ulsch_coding.c:134
+#8  0x0000555555d841de in nr_ue_ulsch_procedures () at openair1/PHY/NR_UE_TRANSPORT/nr_ulsch_ue.c:912
+#9  0x0000555555afcd7d in phy_procedures_nrUE_TX () at openair1/SCHED_NR_UE/phy_procedures_nr_ue.c:346
+#10 0x0000555555a8a97d in main () at openair1/SIMULATION/NR_PHY/ulsim.c:1337
+=== PILHA da 1a chamada a LDPCdecoder (thread 1) ===
+#0  LDPCdecoder () at openair1/PHY/CODING/nrLDPC_decoder/nrLDPC_decoder.c:63
+#1  0x00007ffff6280992 in process_ldpc_dec () at openair1/PHY/CODING/nrLDPC_coding/nrLDPC_coding_aal/bbdev_oai_sw.c:376
+#2  0x00007ffff6280c81 in oai_sw_enqueue_ldpc_dec () at openair1/PHY/CODING/nrLDPC_coding/nrLDPC_coding_aal/bbdev_oai_sw.c:787
+#3  0x00007ffff6271f29 in rte_bbdev_enqueue_ldpc_dec_ops () at /usr/local/include/rte_bbdev.h:662
+#4  pmd_lcore_ldpc_dec () at openair1/PHY/CODING/nrLDPC_coding/nrLDPC_coding_aal/nrLDPC_coding_aal.c:856
+#5  0x00007ffff6275a3d in start_pmd_dec () at openair1/PHY/CODING/nrLDPC_coding/nrLDPC_coding_aal/nrLDPC_coding_aal.c:991
+#6  0x00007ffff6279d36 in nrLDPC_coding_decoder () at openair1/PHY/CODING/nrLDPC_coding/nrLDPC_coding_aal/nrLDPC_coding_aal.c:1366
+#7  0x0000555555abe963 in nr_ulsch_decoding () at openair1/PHY/NR_TRANSPORT/nr_ulsch_decoding.c:286
+#8  0x0000555555af37b7 in nr_ulsch_procedures () at openair1/SCHED_NR/phy_procedures_nr_gNB.c:448
+#9  phy_procedures_gNB_uespec_RX () at openair1/SCHED_NR/phy_procedures_nr_gNB.c:1396
+#10 0x0000555555a89295 in main () at openair1/SIMULATION/NR_PHY/ulsim.c:1497
+LDPCdecoder in section .text of build/b1/libldpc.so
+== E2/E3: bibliotecas e contagens
+##### b0_conta
+0x00007ffff619e000  0x00007ffff6297000  Yes         /home/murilo/tcc/fork/openairinterface5g/build/libldpc.so
+No shared libraries matched.
+        info sharedlibrary ldpc
+        info sharedlibrary rte_bbdev
+=== CONTAGENS (coluna 'breakpoint already hit N times') ===
+1       breakpoint     keep y   0x00007ffff61b0020 in LDPCdecoder at /home/murilo/tcc/fork/openairinterface5g/openair1/PHY/CODING/nrLDPC_decoder/nrLDPC_decoder.c:63
+	breakpoint already hit 84 times
+2       breakpoint     keep y   0x00007ffff621d200 in LDPCencoder at /home/murilo/tcc/fork/openairinterface5g/openair1/PHY/CODING/nrLDPC_encoder/ldpc_encoder_optim8segmulti.c:30
+	breakpoint already hit 28 times
+3       breakpoint     keep y   <PENDING>          oai_sw_enqueue_ldpc_dec
+4       breakpoint     keep y   <PENDING>          oai_sw_enqueue_ldpc_enc
+5       catchpoint     keep y                      syscall "exit_group" 
+	catchpoint already hit 1 time
+        printf "\n=== CONTAGENS (coluna 'breakpoint already hit N times') ===\n"
+##### b1_conta
+0x00007ffff626c000  0x00007ffff6297000  Yes         /home/murilo/tcc/fork/openairinterface5g/build/b1/libldpc_aal.so
+0x00007ffff603c000  0x00007ffff6135000  Yes         /home/murilo/tcc/fork/openairinterface5g/build/b1/libldpc.so
+0x00007ffff76aa000  0x00007ffff76bc000  Yes (*)     /usr/local/lib/x86_64-linux-gnu/librte_bbdev.so.25
+        info sharedlibrary ldpc
+        info sharedlibrary rte_bbdev
+=== CONTAGENS (coluna 'breakpoint already hit N times') ===
+1       breakpoint     keep y   0x00007ffff604e020 in LDPCdecoder at /home/murilo/tcc/fork/openairinterface5g/openair1/PHY/CODING/nrLDPC_decoder/nrLDPC_decoder.c:63
+	breakpoint already hit 84 times
+2       breakpoint     keep y   0x00007ffff60bb200 in LDPCencoder at /home/murilo/tcc/fork/openairinterface5g/openair1/PHY/CODING/nrLDPC_encoder/ldpc_encoder_optim8segmulti.c:30
+	breakpoint already hit 84 times
+3       breakpoint     keep y   0x00007ffff6280be0 in oai_sw_enqueue_ldpc_dec at /home/murilo/tcc/fork/openairinterface5g/openair1/PHY/CODING/nrLDPC_coding/nrLDPC_coding_aal/bbdev_oai_sw.c:771
+	breakpoint already hit 28 times
+4       breakpoint     keep y   0x00007ffff6281750 in oai_sw_enqueue_ldpc_enc at /home/murilo/tcc/fork/openairinterface5g/openair1/PHY/CODING/nrLDPC_coding/nrLDPC_coding_aal/bbdev_oai_sw.c:798
+	breakpoint already hit 28 times
+5       catchpoint     keep y                      syscall "exit_group" 
+	catchpoint already hit 1 time
+        printf "\n=== CONTAGENS (coluna 'breakpoint already hit N times') ===\n"
+##### b0_mutado
+1       breakpoint     keep y   <PENDING>  oai_sw_enqueue_ldpc_dec
+2       catchpoint     keep y              syscall "exit_group" 
+	catchpoint already hit 1 time
+##### b1_mutado
+1       breakpoint     keep y   0x00007ffff6280be0 in oai_sw_enqueue_ldpc_dec at /home/murilo/tcc/fork/openairinterface5g/openair1/PHY/CODING/nrLDPC_coding/nrLDPC_coding_aal/bbdev_oai_sw.c:771
+	breakpoint already hit 80 times
+2       catchpoint     keep y                      syscall "exit_group" 
+	catchpoint already hit 1 time
+== contadores do próprio vdev
+b1_conta.txt:[OAI_SW] summary: DEC 28 calls / 84 ops | ENC 28 calls / 84 ops
+b1_mutado.txt:[OAI_SW] summary: DEC 80 calls / 240 ops | ENC 80 calls / 240 ops
+b1_sem_gdb.txt:[OAI_SW] summary: DEC 28 calls / 84 ops | ENC 28 calls / 84 ops

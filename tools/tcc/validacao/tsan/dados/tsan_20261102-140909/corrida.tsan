@@ -1,0 +1,21 @@
+==================
+WARNING: ThreadSanitizer: data race (pid=363545)
+  Read of size 4 at 0x555555558014 by thread T2:
+    #0 f /home/murilo/tcc/logs/saidas/tsan_20261102-140909/corrida.c:3 (corrida+0x1273) (BuildId: 552de7f00cd3af07b636b38ed13e275c3825b010)
+
+  Previous write of size 4 at 0x555555558014 by thread T1:
+    #0 f /home/murilo/tcc/logs/saidas/tsan_20261102-140909/corrida.c:3 (corrida+0x12a4) (BuildId: 552de7f00cd3af07b636b38ed13e275c3825b010)
+
+  Location is global 'x' of size 4 at 0x555555558014 (corrida+0x4014)
+
+  Thread T2 (tid=363551, running) created by main thread at:
+    #0 pthread_create ../../../../src/libsanitizer/tsan/tsan_interceptors_posix.cpp:1078 (libtsan.so.2+0x5cb02) (BuildId: 66d37dc704b813df6c813b77217284deb43a0042)
+    #1 main /home/murilo/tcc/logs/saidas/tsan_20261102-140909/corrida.c:4 (corrida+0x131b) (BuildId: 552de7f00cd3af07b636b38ed13e275c3825b010)
+
+  Thread T1 (tid=363550, finished) created by main thread at:
+    #0 pthread_create ../../../../src/libsanitizer/tsan/tsan_interceptors_posix.cpp:1078 (libtsan.so.2+0x5cb02) (BuildId: 66d37dc704b813df6c813b77217284deb43a0042)
+    #1 main /home/murilo/tcc/logs/saidas/tsan_20261102-140909/corrida.c:4 (corrida+0x1301) (BuildId: 552de7f00cd3af07b636b38ed13e275c3825b010)
+
+SUMMARY: ThreadSanitizer: data race /home/murilo/tcc/logs/saidas/tsan_20261102-140909/corrida.c:3 in f
+==================
+ThreadSanitizer: reported 1 warnings

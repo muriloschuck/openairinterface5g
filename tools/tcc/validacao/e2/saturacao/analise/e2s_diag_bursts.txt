@@ -1,0 +1,28 @@
+== r1_w16b1.probe: chamadas=12000 bursts=500
+  burst 417: max_abertas=7, 24 chamadas, threads=7, cpus=[2, 3, 4, 5, 6, 7]
+    3 chamadas mais longas (us, cpu, tid): [(127.4, 7, 419369), (145.5, 3, 419374), (216.5, 7, 419369)]
+  pausas entre bursts (us): min=3970.9 mediana=4054.7 max=4491.4; abaixo de 1000: 0
+  threads por burst: min=6 mediana=6.0 max=11; distribuição={6: 498, 7: 1, 11: 1}
+== r2_w16b1.probe: chamadas=12000 bursts=500
+  burst 263: max_abertas=7, 24 chamadas, threads=7, cpus=[2, 3, 4, 5, 6, 7]
+    3 chamadas mais longas (us, cpu, tid): [(137.7, 7, 419535), (147.0, 6, 419534), (445.8, 2, 419536)]
+  burst 407: max_abertas=7, 24 chamadas, threads=7, cpus=[2, 3, 4, 5, 6, 7]
+    3 chamadas mais longas (us, cpu, tid): [(120.6, 3, 419534), (120.6, 7, 419535), (312.4, 2, 419538)]
+  pausas entre bursts (us): min=3970.7 mediana=4055.2 max=6541.9; abaixo de 1000: 0
+  threads por burst: min=6 mediana=6.0 max=7; distribuição={6: 496, 7: 4}
+== r3_w16b1.probe: chamadas=12000 bursts=501
+  burst 161: 23 chamadas, fase=553.8 us, pausa antes=4036.39 us, pausa depois=2188.089 us
+  burst 162: 1 chamadas, fase=64.2 us, pausa antes=2188.089 us, pausa depois=4166.027 us
+  burst 279: max_abertas=7, 24 chamadas, threads=7, cpus=[2, 3, 4, 5, 6, 7]
+    3 chamadas mais longas (us, cpu, tid): [(157.9, 3, 419710), (158.9, 7, 419713), (456.6, 2, 419709)]
+  pausas entre bursts (us): min=2188.1 mediana=4047.7 max=8981.3; abaixo de 1000: 0
+  threads por burst: min=1 mediana=6 max=7; distribuição={1: 1, 6: 498, 7: 2}
+== r1_w6b1.probe: chamadas=12000 bursts=500
+  pausas entre bursts (us): min=3994.6 mediana=4079.5 max=4546.6; abaixo de 1000: 0
+  threads por burst: min=5 mediana=6.0 max=6; distribuição={5: 1, 6: 499}
+== r2_w6b1.probe: chamadas=12000 bursts=500
+  pausas entre bursts (us): min=3983.5 mediana=4066.4 max=6556.5; abaixo de 1000: 0
+  threads por burst: min=5 mediana=6.0 max=6; distribuição={5: 3, 6: 497}
+== r3_w6b1.probe: chamadas=12000 bursts=500
+  pausas entre bursts (us): min=3974.9 mediana=4058.8 max=9411.4; abaixo de 1000: 0
+  threads por burst: min=5 mediana=6.0 max=6; distribuição={5: 3, 6: 497}

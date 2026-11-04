@@ -1,0 +1,85 @@
+CMDLINE: "./nr_ulsim" "-n" "500" "-m" "27" "-r" "273" "-R" "273" "-s" "30" "-S" "30" "-P" "--loader.ldpc.shlibpath" "/home/murilo/tcc/fork/openairinterface5g/build" "--loader.ldpc.shlibversion" "_aal" "--nrLDPC_coding_aal.dpdk_dev" "baseband_oai_sw" "--nrLDPC_coding_aal.dpdk_core_list" "0-1" "--nrLDPC_coding_aal.compute" "oai_sw.mode=par,oai_sw.workers=2,oai_sw.batch=64" 
+[OAI_SW] kernels loaded from /home/murilo/tcc/fork/openairinterface5g/build/libldpc.so
+EAL: memzone_reserve_aligned_thread_unsafe(): Number of requested memzone segments exceeds maximum 0
+BBDEV: Cannot allocate memzone for bbdev port data
+EAL: Driver cannot attach the device (baseband_oai_sw)
+EAL: Failed to attach device on primary process
+EAL: Detected CPU lcores: 8
+EAL: Detected NUMA nodes: 1
+EAL: Detected shared linkage of DPDK
+EAL: Multi-process socket /var/run/dpdk/b6/mp_socket
+EAL: Selected IOVA mode 'VA'
+[OAI_SW] worker pool: 16 threads, CPUs 2,3,4,5,6,7
+[OAI_SW] device baseband_oai_sw created (LDPC_ENC + LDPC_DEC, 8 queues, internal HARQ)
+[OAI_SW] queue 0 configured (op_type=RTE_BBDEV_OP_LDPC_ENC, size=16384)
+[OAI_SW] queue 1 configured (op_type=RTE_BBDEV_OP_LDPC_DEC, size=16384)
+[OAI_SW] summary: DEC 500 calls / 12000 ops | ENC 500 calls / 12000 ops
+Initializing random number generator, seed 1
+handling optarg n
+handling optarg m
+handling optarg r
+handling optarg R
+handling optarg s
+Setting SNR0 to 30.000000
+handling optarg S
+Setting SNR1 to 30.000000
+handling optarg P
+AWGN: ricean_factor 0.000000
+Pre-allocating padded host memory for the CPU channel pipeline...
+[ULSIM]: length_dmrs: 1, l_prime_mask: 1	number_dmrs_symbols: 1, mapping_type: 1 add_pos: 0 
+[ULSIM]: CDM groups: 1, dmrs_config_type: 0, num_rbs: 273, nb_symb_sch: 12, start_symbol 0
+[ULSIM]: MCS: 27, mod order: 6, code_rate: 9100
+[ULSIM]: VALUE OF G: 226044, TBS: 200808
+*****************************************
+SNR 30.000000: n_errors (0/500,0/0,0/0,0/0) (negative CRC), false_positive 0/500, errors_scrambling (0/113022000,0/0,0/0,0/0)
+
+SNR 30.000000: Channel BLER (0.000000e+00,-nan,-nan,-nan Channel BER (0.000000e+00,-nan,-nan,-nan) Avg round 1.00, Eff Rate 200808.0000 bits/slot, Eff Throughput 100.00, TBS 200808 bits/slot
+DMRS-PUSCH delay estimation: min 0, max 0, average 0.0
+*****************************************
+
+UE TX
+|__ PHY_PROC_TX                            1084.57 us (500 trials)		(542284.57 total [ms])
+|__ PUSCH_PROC_STATS                       993.73 us (500 trials)		(496866.95 total [ms])
+|__ UCI_ON_PUSCH_MAPPING                     0.00 us (  0 trials)		(  0.00 total [ms])
+|__ ULSCH_LDPC_ENCODING_STATS              872.17 us (500 trials)		(436087.75 total [ms])
+|__ ULSCH_ENCODING_STATS                   914.75 us (500 trials)		(457376.78 total [ms])
+|__ OFDM_MOD_STATS                          90.41 us (500 trials)		(45205.14 total [ms])
+
+gNB RX
+Total PHY proc rx                           1652.96 us (500 trials)
+ Statistics std=97.27, min=1516.32, q1=1633.39, median=1641.17, q3=1648.77, max=2606.18 µs (on 500 trials)
+|__ RX PUSCH time                          186.12 us (500 trials)		(93061.79 total [ms])
+    |__ ULSCH channel estimation time       42.52 us (500 trials)		(21262.15 total [ms])
+        |__ Antenna Processing time         30.30 us (500 trials)
+    |__ RX PUSCH Initialization time        23.70 us (500 trials)		(11848.21 total [ms])
+    |__ RX PUSCH Symbol Processing time    118.61 us (500 trials)		(59304.68 total [ms])
+        |__ RX PUSCH extraction              1.77 us (500 trials)
+        |__ RX PUSCH channel compensation    0.00 us (500 trials)
+        |__ RX PUSCH LLR                     0.00 us (500 trials)
+        |__ RX PUSCH layer demapping         0.00 us (500 trials)
+        |__ RX PUSCH unscrambling            0.00 us (500 trials)
+|__ ULSCH total decoding time              1466.33 us (500 trials)		(733162.82 total [ms])
+    |__ ULSCH segments decoding time       1371.87 us (500 trials)		(685936.44 total [ms])
+|__ RX SRS time                              0.00 us (  0 trials)		(  0.00 total [ms])
+    |__ Generate SRS sequence time           0.00 us (  0 trials)		(  0.00 total [ms])
+    |__ Get SRS signal time                  0.00 us (  0 trials)		(  0.00 total [ms])
+    |__ SRS channel estimation time          0.00 us (  0 trials)		(  0.00 total [ms])
+    |__ SRS timing advance estimation time   0.00 us (  0 trials)		(  0.00 total [ms])
+    |__ SRS report TLV build time            0.00 us (  0 trials)		(  0.00 total [ms])
+        |__ SRS beam report build time       0.00 us (  0 trials)
+        |__ SRS IQ matrix build time         0.00 us (  0 trials)
+|__ Multipath Channel (CPU)                331.88 us (500 trials)		(165938.16 total [ms])
+|__ Add Noise (CPU)                        588.37 us (500 trials)		(294187.25 total [ms])
+
+*************
+PUSCH test OK
+*************
+
+Num RB:	273
+Num symbols:	12
+MCS:	27
+DMRS config type:	0
+DMRS add pos:	0
+PUSCH mapping type:	1
+DMRS length:	1
+DMRS CDM gr w/o data:	1

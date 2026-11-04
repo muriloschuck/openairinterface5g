@@ -1,0 +1,49 @@
+CMDLINE: "./nr_ulsim" "-n" "1000" "-m" "9" "-r" "106" "-R" "106" "-s" "7" "-S" "7" "--loader.ldpc.shlibpath" "/home/murilo/tcc/fork/openairinterface5g/build/b1" "--loader.ldpc.shlibversion" "_aal" "--nrLDPC_coding_aal.dpdk_dev" "baseband_oai_sw" "--nrLDPC_coding_aal.dpdk_core_list" "0-1" 
+[OAI_SW] kernels loaded from /home/murilo/tcc/fork/openairinterface5g/build/b1/libldpc.so
+EAL: memzone_reserve_aligned_thread_unsafe(): Number of requested memzone segments exceeds maximum 0
+BBDEV: Cannot allocate memzone for bbdev port data
+EAL: Driver cannot attach the device (baseband_oai_sw)
+EAL: Failed to attach device on primary process
+EAL: Detected CPU lcores: 8
+EAL: Detected NUMA nodes: 1
+EAL: Detected shared linkage of DPDK
+EAL: Multi-process socket /var/run/dpdk/b6/mp_socket
+EAL: Selected IOVA mode 'VA'
+[OAI_SW] device baseband_oai_sw created (LDPC_ENC + LDPC_DEC, 8 queues, internal HARQ)
+[OAI_SW] queue 0 configured (op_type=RTE_BBDEV_OP_LDPC_ENC, size=16384)
+[OAI_SW] queue 1 configured (op_type=RTE_BBDEV_OP_LDPC_DEC, size=16384)
+[OAI_SW] summary: DEC 1000 calls / 3000 ops | ENC 1000 calls / 3000 ops
+Initializing random number generator, seed 4
+handling optarg n
+handling optarg m
+handling optarg r
+handling optarg R
+handling optarg s
+Setting SNR0 to 7.000000
+handling optarg S
+Setting SNR1 to 7.000000
+AWGN: ricean_factor 0.000000
+Pre-allocating padded host memory for the CPU channel pipeline...
+[ULSIM]: length_dmrs: 1, l_prime_mask: 1	number_dmrs_symbols: 1, mapping_type: 1 add_pos: 0 
+[ULSIM]: CDM groups: 1, dmrs_config_type: 0, num_rbs: 106, nb_symb_sch: 12, start_symbol 0
+[ULSIM]: MCS: 9, mod order: 2, code_rate: 6790
+[ULSIM]: VALUE OF G: 29256, TBS: 19464
+*****************************************
+SNR 7.000000: n_errors (0/1000,0/0,0/0,0/0) (negative CRC), false_positive 0/1000, errors_scrambling (588281/29256000,0/0,0/0,0/0)
+
+SNR 7.000000: Channel BLER (0.000000e+00,-nan,-nan,-nan Channel BER (2.010805e-02,-nan,-nan,-nan) Avg round 1.00, Eff Rate 19464.0000 bits/slot, Eff Throughput 100.00, TBS 19464 bits/slot
+DMRS-PUSCH delay estimation: min 0, max 0, average 0.0
+*****************************************
+
+*************
+PUSCH test OK
+*************
+
+Num RB:	106
+Num symbols:	12
+MCS:	9
+DMRS config type:	0
+DMRS add pos:	0
+PUSCH mapping type:	1
+DMRS length:	1
+DMRS CDM gr w/o data:	1

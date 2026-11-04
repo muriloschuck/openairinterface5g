@@ -1,0 +1,7 @@
+W3_c0 chamadas=4800 threads=1 max_abertas=1 sobrepostas=0.0% perdidos=0 sem_par=0 hist_inicio=[1:4800]
+W3_c1 chamadas=4800 threads=16 max_abertas=1 sobrepostas=0.0% perdidos=0 sem_par=0 hist_inicio=[1:4800]
+W3_c3 chamadas=4800 threads=16 max_abertas=3 sobrepostas=99.4% perdidos=0 sem_par=0 hist_inicio=[1:765 2:1616 3:2419]
+W3_c5 chamadas=4800 threads=16 max_abertas=1 sobrepostas=0.0% perdidos=0 sem_par=0 hist_inicio=[1:4800]
+W3_c6 chamadas=4800 threads=16 max_abertas=6 sobrepostas=100.0% perdidos=0 sem_par=0 hist_inicio=[1:292 2:529 3:933 4:1048 5:977 6:1021]
+W1_c0 chamadas=600 threads=1 max_abertas=1 sobrepostas=0.0% perdidos=0 sem_par=0 hist_inicio=[1:600]
+W1_c3 chamadas=600 threads=16 max_abertas=3 sobrepostas=100.0% perdidos=0 sem_par=0 hist_inicio=[1:200 2:201 3:199]

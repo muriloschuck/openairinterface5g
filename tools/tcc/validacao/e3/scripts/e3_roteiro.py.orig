@@ -1,0 +1,191 @@
+#!/usr/bin/env python3
+"""e3_roteiro.py: E3 (passo 3). Parte 1, itens 1-30: contrato da AALI-C (V3). Parte 2, itens 31-35: alternância de
+configurações durante a execução (V5 e V2 em runtime), com t0 medido aqui e t1/t2 lidos das estatísticas por versão."""
+import argparse, json, os, socket, sys, time
+
+ap = argparse.ArgumentParser()
+ap.add_argument("--sock", default="/tmp/aal_ext.sock")
+ap.add_argument("--pid", type=int, required=True)
+ap.add_argument("--dir", required=True)
+ap.add_argument("--limits0", required=True)
+ap.add_argument("--trocas", type=int, default=40)
+ap.add_argument("--intervalo", type=float, default=0.3)
+ap.add_argument("--cbs", type=int, default=24)
+a = ap.parse_args()
+
+def req(line, timeout=5.0):
+    s = socket.socket(socket.AF_UNIX); s.settimeout(timeout); s.connect(a.sock)
+    s.sendall(line.encode() + b"\n")
+    buf = b""
+    while not buf.endswith(b"\n"):
+        c = s.recv(65536)
+        if not c: break
+        buf += c
+    s.close()
+    return json.loads(buf.decode())   # falha aqui = JSON inválido
+
+def lim(name, text):
+    p = os.path.join(a.dir, name)
+    if text is not None:
+        with open(p, "w") as f: f.write(text)
+        os.chmod(p, 0o644)
+    return req(f"setAalAccelConfig limits={p}")
+
+ok = fail = 0
+def item(n, desc, cond, resp):
+    global ok, fail
+    if cond: ok += 1
+    else: fail += 1
+    print(f"{'OK   ' if cond else 'FALHA'} {n:>2} {desc}")
+    if not cond: print("        resposta:", json.dumps(resp, ensure_ascii=False))
+
+def par(caps, name):
+    return next((p for p in caps.get("params", []) if p.get("name") == name), {})
+
+def cfg():
+    g = req("getAalLpuComputeConfig"); v = g.get("values", {})
+    return g, g.get("version"), (v.get("oai_sw.mode"), v.get("oai_sw.workers"), v.get("oai_sw.batch"))
+
+def stat(v):
+    r = req("getAalLpuComputeStats")
+    return r, next((x for x in r.get("versions", []) if x.get("version") == v), None)
+
+# estado inicial: descritor puro, depois limite workers 1..4 (não conta como item)
+c0 = req("getAalLpuComputeCapabilities"); w0 = par(c0, "oai_sw.workers")
+print(f"# inicial: descriptor_version {c0.get('descriptor_version')} workers {w0.get('min')}..{w0.get('max')}")
+r = req(f"setAalAccelConfig limits={a.limits0}")
+print(f"# limite inicial: {r.get('status')} descriptor_version {r.get('descriptor_version')} adjusted {r.get('adjusted')}")
+if not (c0.get("descriptor_version") == 1 and (w0.get("min"), w0.get("max")) == (1, 16) and r.get("status") == "OK"):
+    print("abortado: estado inicial diferente do previsto"); sys.exit(2)
+
+c = req("getAalLpuComputeCapabilities"); w = par(c, "oai_sw.workers")
+item(1, "caps: handle baseband_oai_sw, descriptor_version 2, workers 1..4",
+     c.get("status") == "OK" and c.get("aal_lpu_handle") == "baseband_oai_sw"
+     and c.get("descriptor_version") == 2 and (w.get("min"), w.get("max")) == (1, 4), c)
+g, v, t = cfg()
+item(2, "get: versão 1, seq/1/1", g.get("status") == "OK" and v == 1 and t == ("seq", 1, 1), g)
+
+S = "setAalLpuComputeConfig "
+erros = [
+    (3, "oai_sw.nada=1", "UNKNOWN_PARAM"),
+    (4, "oai_sw.mode=rapido", "INVALID_TYPE"),
+    (5, "oai_sw.workers=2x", "INVALID_TYPE"),
+    (6, "oai_sw.batch=65", "OUT_OF_RANGE"),
+    (7, "oai_sw.batch=0", "OUT_OF_RANGE"),
+    (8, "oai_sw.workers=8", "LIMIT_EXCEEDED"),
+    (9, "", "BAD_REQUEST"),
+    (10, "oai_sw.workers=2 oai_sw.workers=3", "BAD_REQUEST"),
+    (11, "expected_version=abc oai_sw.workers=2", "BAD_REQUEST"),
+    (12, "oai_sw.workers", "BAD_REQUEST"),
+    (15, "oai_sw.mode=par oai_sw.workers=8", "LIMIT_EXCEEDED"),
+    (16, "expected_version=7 oai_sw.workers=2", "VERSION_CONFLICT"),
+]
+for n, args, st in erros:
+    r = req((S + args).strip())
+    item(n, f"set {args or '(vazio)'} -> {st}", r.get("status") == st, r)
+r = req("opInexistente"); item(13, "op desconhecida -> BAD_REQUEST", r.get("status") == "BAD_REQUEST", r)
+r = req("getAalLpuComputeCapabilities extra"); item(14, "caps com token extra -> BAD_REQUEST", r.get("status") == "BAD_REQUEST", r)
+g, v, t = cfg(); item(17, "get após erros: versão 1, seq/1/1", v == 1 and t == ("seq", 1, 1), g)
+
+r = req(S + "expected_version=1 oai_sw.mode=par oai_sw.workers=3 oai_sw.batch=2")
+item(18, "set par/3/2 -> OK, versão 2", r.get("status") == "OK" and r.get("version") == 2, r)
+g, v, t = cfg(); item(19, "get: versão 2, par/3/2", v == 2 and t == ("par", 3, 2), g)
+
+time.sleep(1.0); r1, a2 = stat(2); _, a1 = stat(1)
+time.sleep(1.0); r2, b2 = stat(2); _, b1 = stat(1)
+cond = (a2 and b2 and a1 and b1 and b2["bursts"] > a2["bursts"] > 0
+        and a2["t_first_burst_ns"] >= a2["t_applied_ns"] > 0
+        and a1["bursts"] > 0 and a1["bursts"] == b1["bursts"])
+item(20, f"stats: v2 {a2 and a2['bursts']}->{b2 and b2['bursts']}, v1 {a1 and a1['bursts']}->{b1 and b1['bursts']}", bool(cond), r2)
+
+r = lim("lim_1_2.txt", "oai_sw.workers 1 2\n")
+item(21, "limits workers 1 2 -> OK, descriptor 3, versão 3, adjusted workers",
+     r.get("status") == "OK" and r.get("descriptor_version") == 3 and r.get("version") == 3
+     and "oai_sw.workers" in json.dumps(r.get("adjusted")), r)
+g, v, t = cfg(); item(22, "get: versão 3, par/2/2", v == 3 and t == ("par", 2, 2), g)
+
+invalidos = [
+    (23, "workers 20 30", "oai_sw.workers 20 30\n"),
+    (24, "mode 5 9", "oai_sw.mode 5 9\n"),
+    (25, "batch 0 0", "oai_sw.batch 0 0\n"),
+    (26, "linha malformada", "oai_sw.workers 1\n"),
+    (27, "arquivo inexistente", None),
+    (28, "parâmetro desconhecido", "oai_sw.nada 1 2\n"),
+]
+for n, desc, txt in invalidos:
+    r = lim(f"lim_inv{n}.txt", txt) if txt is not None else req("setAalAccelConfig limits=/nonexistent/v3.txt")
+    c = req("getAalLpuComputeCapabilities")
+    item(n, f"limits {desc} -> BAD_REQUEST, descriptor fica 3",
+         r.get("status") == "BAD_REQUEST" and c.get("descriptor_version") == 3, r)
+
+r = lim("lim_1_4.txt", "oai_sw.workers 1 4\n"); g, v, t = cfg()
+item(29, "limits workers 1 4 -> OK, descriptor 4, adjusted vazio, versão 3",
+     r.get("status") == "OK" and r.get("descriptor_version") == 4 and not r.get("adjusted") and v == 3, r)
+
+try:
+    r = req(S + 'oai_sw.fo"o=1'); js = r.get("status") == "UNKNOWN_PARAM"
+except Exception as e:
+    r, js = {"erro": repr(e)}, False
+try:
+    s = socket.socket(socket.AF_UNIX); s.connect(a.sock)
+    s.sendall(b"getAalLpuComputeCapabilities\n" * 200); s.close()
+except Exception as e:
+    print("        (cliente precoce:", repr(e), ")")
+time.sleep(0.5)
+vivo = os.path.isdir(f"/proc/{a.pid}")
+try: g = req("getAalLpuComputeConfig"); resp = g.get("status") == "OK"
+except Exception: resp = False
+item(30, "JSON válido com aspas; processo vivo e respondendo após cliente que fecha sem ler", js and vivo and resp, r)
+
+
+# ---------------- parte 2: alternância durante a execução (V5, V2 em runtime) ----------------
+CICLO = [("seq", 1, 1), ("par", 1, 1), ("par", 2, 1), ("par", 3, 1), ("par", 3, 2), ("par", 4, 1), ("par", 3, 64), ("par", 4, 2)]
+g, v, t = cfg()
+print(f"# alternância: {a.trocas} trocas a cada {a.intervalo} s, a partir da versão {v}")
+reg = []   # (versão, t0, config)
+aceitas = True
+for k in range(a.trocas):
+    m, w, b = CICLO[k % len(CICLO)]
+    t0 = time.monotonic_ns()   # CLOCK_MONOTONIC, o mesmo relógio de t_applied_ns e t_first_burst_ns
+    r = req(f"{S}expected_version={v} oai_sw.mode={m} oai_sw.workers={w} oai_sw.batch={b}")
+    if r.get("status") != "OK" or r.get("version") != v + 1:
+        aceitas = False; print("        troca recusada:", json.dumps(r, ensure_ascii=False)); break
+    v = r["version"]; reg.append((v, t0, (m, w, b)))
+    time.sleep(a.intervalo)
+v_ini = reg[0][0] if reg else None
+item(31, f"{len(reg)} trocas aceitas, versões {v_ini}..{v} consecutivas", aceitas and len(reg) == a.trocas, {"ultima": v})
+
+time.sleep(a.intervalo)
+st = req("getAalLpuComputeStats"); por_v = {x["version"]: x for x in st.get("versions", [])}
+sem_burst = [vv for vv, _, _ in reg if por_v.get(vv, {}).get("bursts", 0) == 0]
+ops_ruins = [vv for vv, _, _ in reg if vv in por_v and por_v[vv]["ops"] != a.cbs * por_v[vv]["bursts"]]
+item(32, f"todas as versões com bursts > 0 e ops = {a.cbs} × bursts (sem bursts: {sem_burst[:5]}, ops: {ops_ruins[:5]})",
+     bool(reg) and not sem_burst and not ops_ruins, {"sem_burst": sem_burst, "ops_ruins": ops_ruins})
+
+d10, d21, ordem = [], [], []
+for vv, t0, c in reg:
+    s = por_v.get(vv)
+    if not s: ordem.append(vv); continue
+    t1, t2 = s["t_applied_ns"], s["t_first_burst_ns"]
+    if not (t0 <= t1 and (t2 == 0 or t1 <= t2)): ordem.append(vv)
+    d10.append(t1 - t0)
+    if t2: d21.append(t2 - t1)
+item(33, "t0 ≤ t1 ≤ t2 em todas as versões", bool(reg) and not ordem, {"fora_de_ordem": ordem})
+
+def resumo(xs):
+    xs = sorted(xs)
+    return f"n={len(xs)} mediana={xs[len(xs)//2]/1e3:.1f} us máx={xs[-1]/1e3:.1f} us" if xs else "n=0"
+print(f"# t1 - t0 (pedido até a versão valer): {resumo(d10)}")
+print(f"# t2 - t1 (versão valer até o primeiro burst; depende do ritmo do nr_ulsim): {resumo(d21)}")
+item(34, "t1 - t0 medido em todas as trocas, todos abaixo de 50 ms", len(d10) == len(reg) and d10 and max(d10) < 50_000_000, {"t1_t0_ns": d10})
+
+vivo = os.path.isdir(f"/proc/{a.pid}")
+item(35, "nr_ulsim ainda rodando ao fim da alternância", vivo, {"pid": a.pid})
+with open(os.path.join(a.dir, "trocas.csv"), "w") as f:
+    f.write("versao,mode,workers,batch,t0_ns,t1_ns,t2_ns,bursts,ops\n")
+    for vv, t0, (m, w, b) in reg:
+        s = por_v.get(vv, {})
+        f.write(f"{vv},{m},{w},{b},{t0},{s.get('t_applied_ns','')},{s.get('t_first_burst_ns','')},{s.get('bursts','')},{s.get('ops','')}\n")
+
+print(f"RESULTADO: {ok} OK, {fail} FALHA")
+sys.exit(0 if fail == 0 else 1)

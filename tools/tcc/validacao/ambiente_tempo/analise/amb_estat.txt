@@ -1,0 +1,5 @@
+fase,config,n,media_us,dp_us,cv_pct,ic95_pct,n_para_5pct,n_para_2pct
+antes,B1,5,1342.1,35.4,2.64,3.28,4,10
+antes,B2par3,5,812.4,26.0,3.20,3.98,5,13
+antes,B2seq,5,1352.2,14.8,1.10,1.36,3,4
+freq antes: amostras=120 min=800 MHz mediana=3904 MHz max=4002 MHz

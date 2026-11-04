@@ -1,0 +1,54 @@
+Function "oai_sw_enqueue_ldpc_dec" not defined.
+Breakpoint 1 (oai_sw_enqueue_ldpc_dec) pending.
+Catchpoint 2 (syscall 'exit_group' [231])
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/usr/lib/x86_64-linux-gnu/libthread_db.so.1".
+CMDLINE: "/home/murilo/tcc/fork/openairinterface5g/build/nr_ulsim" "-n" "20" "-m" "9" "-r" "106" "-R" "106" "-s" "5.4" "-S" "5.4" "--loader.ldpc.shlibpath" "/home/murilo/tcc/fork/openairinterface5g/build" 
+Initializing random number generator, seed 1
+handling optarg n
+handling optarg m
+handling optarg r
+handling optarg R
+handling optarg s
+Setting SNR0 to 5.400000
+handling optarg S
+Setting SNR1 to 5.400000
+AWGN: ricean_factor 0.000000
+Pre-allocating padded host memory for the CPU channel pipeline...
+[ULSIM]: length_dmrs: 1, l_prime_mask: 1	number_dmrs_symbols: 1, mapping_type: 1 add_pos: 0 
+[ULSIM]: CDM groups: 1, dmrs_config_type: 0, num_rbs: 106, nb_symb_sch: 12, start_symbol 0
+[ULSIM]: MCS: 9, mod order: 2, code_rate: 6790
+[ULSIM]: VALUE OF G: 29256, TBS: 19464
+*****************************************
+SNR 5.400000: n_errors (8/20,0/8,0/0,0/0) (negative CRC), false_positive 0/20, errors_scrambling (25720/585120,10343/234048,0/0,0/0)
+
+SNR 5.400000: Channel BLER (4.000000e-01,0.000000e+00,-nan,-nan Channel BER (4.395680e-02,4.419179e-02,-nan,-nan) Avg round 1.40, Eff Rate 15571.2000 bits/slot, Eff Throughput 80.00, TBS 19464 bits/slot
+DMRS-PUSCH delay estimation: min 0, max 0, average 0.0
+*****************************************
+
+
+Num RB:	106
+Num symbols:	12
+MCS:	9
+DMRS config type:	0
+DMRS add pos:	0
+PUSCH mapping type:	1
+DMRS length:	1
+DMRS CDM gr w/o data:	1
+
+Thread 1 "nr_ulsim" hit Catchpoint 2 (call to syscall exit_group), __GI__exit (status=status@entry=1) at ../sysdeps/unix/sysv/linux/_exit.c:30
+warning: 30	../sysdeps/unix/sysv/linux/_exit.c: No such file or directory
+Num     Type           Disp Enb Address    What
+1       breakpoint     keep y   <PENDING>  oai_sw_enqueue_ldpc_dec
+        silent
+        set $i = 0
+        while $i < nb_ops
+          set var ops[$i]->ldpc_dec.iter_max = 1
+          set $i = $i + 1
+        end
+        continue
+2       catchpoint     keep y              syscall "exit_group" 
+	catchpoint already hit 1 time
+        info breakpoints
+        continue
+[Inferior 1 (process 435199) exited with code 01]

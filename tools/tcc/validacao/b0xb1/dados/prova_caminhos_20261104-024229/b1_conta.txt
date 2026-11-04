@@ -1,0 +1,135 @@
+Function "LDPCdecoder" not defined.
+Breakpoint 1 (LDPCdecoder) pending.
+Function "LDPCencoder" not defined.
+Breakpoint 2 (LDPCencoder) pending.
+Function "oai_sw_enqueue_ldpc_dec" not defined.
+Breakpoint 3 (oai_sw_enqueue_ldpc_dec) pending.
+Function "oai_sw_enqueue_ldpc_enc" not defined.
+Breakpoint 4 (oai_sw_enqueue_ldpc_enc) pending.
+Catchpoint 5 (syscall 'exit_group' [231])
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/usr/lib/x86_64-linux-gnu/libthread_db.so.1".
+CMDLINE: "/home/murilo/tcc/fork/openairinterface5g/build/nr_ulsim" "-n" "20" "-m" "9" "-r" "106" "-R" "106" "-s" "5.4" "-S" "5.4" "--loader.ldpc.shlibpath" "/home/murilo/tcc/fork/openairinterface5g/build/b1" "--loader.ldpc.shlibversion" "_aal" "--nrLDPC_coding_aal.dpdk_dev" "baseband_oai_sw" "--nrLDPC_coding_aal.dpdk_core_list" "0-1" 
+[OAI_SW] kernels loaded from /home/murilo/tcc/fork/openairinterface5g/build/b1/libldpc.so
+EAL: memzone_reserve_aligned_thread_unsafe(): Number of requested memzone segments exceeds maximum 0
+BBDEV: Cannot allocate memzone for bbdev port data
+EAL: Driver cannot attach the device (baseband_oai_sw)
+EAL: Failed to attach device on primary process
+EAL: Detected CPU lcores: 8
+EAL: Detected NUMA nodes: 1
+EAL: Detected shared linkage of DPDK
+EAL: Multi-process socket /var/run/dpdk/b6/mp_socket
+EAL: Selected IOVA mode 'VA'
+[OAI_SW] device baseband_oai_sw created (LDPC_ENC + LDPC_DEC, 8 queues, internal HARQ)
+[OAI_SW] queue 0 configured (op_type=RTE_BBDEV_OP_LDPC_ENC, size=16384)
+[OAI_SW] queue 1 configured (op_type=RTE_BBDEV_OP_LDPC_DEC, size=16384)
+
+=== PILHA da 1a chamada a LDPCencoder (thread 1) ===
+#0  LDPCencoder (input=0x7fffffd98cf8, output=0x7fffffd99a00 "", impp=0x7fffffd98ae0) at /home/murilo/tcc/fork/openairinterface5g/openair1/PHY/CODING/nrLDPC_encoder/ldpc_encoder_optim8segmulti.c:30
+#1  0x00007ffff62816cd in process_ldpc_enc (op=0x1004d7d80) at /home/murilo/tcc/fork/openairinterface5g/openair1/PHY/CODING/nrLDPC_coding/nrLDPC_coding_aal/bbdev_oai_sw.c:260
+#2  0x00007ffff62817f1 in oai_sw_enqueue_ldpc_enc (q_data=0x1003fa900, ops=0x7fffffda0120, nb_ops=3) at /home/murilo/tcc/fork/openairinterface5g/openair1/PHY/CODING/nrLDPC_coding/nrLDPC_coding_aal/bbdev_oai_sw.c:802
+#3  0x00007ffff62701cb in rte_bbdev_enqueue_ldpc_enc_ops (dev_id=<optimized out>, queue_id=<optimized out>, ops=<optimized out>, num_ops=<optimized out>) at /usr/local/include/rte_bbdev.h:632
+#4  pmd_lcore_ldpc_enc (arg=arg@entry=0x102869780) at /home/murilo/tcc/fork/openairinterface5g/openair1/PHY/CODING/nrLDPC_coding/nrLDPC_coding_aal/nrLDPC_coding_aal.c:933
+#5  0x00007ffff6275d59 in start_pmd_enc (ad=ad@entry=0x7ffff6286440 <active_dev>, op_params=0x1003ba140, data_buffers=data_buffers@entry=0x7fffffda0710, nrLDPC_slot_encoding_parameters=nrLDPC_slot_encoding_parameters@entry=0x7fffffda0da0) at /home/murilo/tcc/fork/openairinterface5g/openair1/PHY/CODING/nrLDPC_coding/nrLDPC_coding_aal/nrLDPC_coding_aal.c:1036
+#6  0x00007ffff627bad7 in nrLDPC_coding_encoder (nrLDPC_slot_encoding_parameters=<optimized out>) at /home/murilo/tcc/fork/openairinterface5g/openair1/PHY/CODING/nrLDPC_coding/nrLDPC_coding_aal/nrLDPC_coding_aal.c:1406
+#7  0x0000555555d99a1c in nr_ulsch_encoding (ue=ue@entry=0x7fffd024a010, ulsch=ulsch@entry=0x7fffffddb770, frame=frame@entry=1, slot=slot@entry=8 '\b', G=G@entry=0x7fffffdbda4c, nb_ulsch=nb_ulsch@entry=1, ULSCH_ids=<optimized out>) at /home/murilo/tcc/fork/openairinterface5g/openair1/PHY/NR_UE_TRANSPORT/nr_ulsch_coding.c:134
+#8  0x0000555555d841de in nr_ue_ulsch_procedures (UE=UE@entry=0x7fffd024a010, frame=frame@entry=1, slot=slot@entry=8 '\b', phy_data=phy_data@entry=0x7fffffddb770, txdataF=txdataF@entry=0x7fffffdbe040, was_symbol_used=was_symbol_used@entry=0x7fffffdda122) at /home/murilo/tcc/fork/openairinterface5g/openair1/PHY/NR_UE_TRANSPORT/nr_ulsch_ue.c:912
+#9  0x0000555555afcd7d in phy_procedures_nrUE_TX (ue=ue@entry=0x7fffd024a010, proc=proc@entry=0x7fffffddb1d0, phy_data=phy_data@entry=0x7fffffddb770, txp=txp@entry=0x7fffffdda560) at /home/murilo/tcc/fork/openairinterface5g/openair1/SCHED_NR_UE/phy_procedures_nr_ue.c:346
+#10 0x0000555555a8a97d in main (argc=<optimized out>, argv=<optimized out>) at /home/murilo/tcc/fork/openairinterface5g/openair1/SIMULATION/NR_PHY/ulsim.c:1337
+
+=== PILHA da 1a chamada a LDPCdecoder (thread 1) ===
+#0  LDPCdecoder (p_decParams=0x7fffffd91020, p_llr=0x7fffffd9e120 "", p_out=0x7fffffda4740 "", p_profiler=0x7fffffd91050, ab=0x7fffffd914d0) at /home/murilo/tcc/fork/openairinterface5g/openair1/PHY/CODING/nrLDPC_decoder/nrLDPC_decoder.c:63
+#1  0x00007ffff6280992 in process_ldpc_dec (op=0x100279e80) at /home/murilo/tcc/fork/openairinterface5g/openair1/PHY/CODING/nrLDPC_coding/nrLDPC_coding_aal/bbdev_oai_sw.c:376
+#2  0x00007ffff6280c81 in oai_sw_enqueue_ldpc_dec (q_data=0x1003fa990, ops=0x7fffffdab160, nb_ops=3) at /home/murilo/tcc/fork/openairinterface5g/openair1/PHY/CODING/nrLDPC_coding/nrLDPC_coding_aal/bbdev_oai_sw.c:787
+#3  0x00007ffff6271f29 in rte_bbdev_enqueue_ldpc_dec_ops (dev_id=<optimized out>, queue_id=<optimized out>, ops=<optimized out>, num_ops=<optimized out>) at /usr/local/include/rte_bbdev.h:662
+#4  pmd_lcore_ldpc_dec (arg=arg@entry=0x1028696c0) at /home/murilo/tcc/fork/openairinterface5g/openair1/PHY/CODING/nrLDPC_coding/nrLDPC_coding_aal/nrLDPC_coding_aal.c:856
+#5  0x00007ffff6275a3d in start_pmd_dec (ad=ad@entry=0x7ffff6286440 <active_dev>, op_params=0x1003ba140, data_buffers=data_buffers@entry=0x7fffffdc3b50, nrLDPC_slot_decoding_parameters=nrLDPC_slot_decoding_parameters@entry=0x7fffffdd4250) at /home/murilo/tcc/fork/openairinterface5g/openair1/PHY/CODING/nrLDPC_coding/nrLDPC_coding_aal/nrLDPC_coding_aal.c:991
+#6  0x00007ffff6279d36 in nrLDPC_coding_decoder (nrLDPC_slot_decoding_parameters=<optimized out>) at /home/murilo/tcc/fork/openairinterface5g/openair1/PHY/CODING/nrLDPC_coding/nrLDPC_coding_aal/nrLDPC_coding_aal.c:1366
+#7  0x0000555555abe963 in nr_ulsch_decoding (phy_vars_gNB=phy_vars_gNB@entry=0x7ffff7244010, frame_parms=frame_parms@entry=0x7ffff7244580, frame=frame@entry=1, nr_tti_rx=nr_tti_rx@entry=8 '\b', ULSCH_ids=ULSCH_ids@entry=0x7fffffdd4a00, nb_pusch=nb_pusch@entry=1) at /home/murilo/tcc/fork/openairinterface5g/openair1/PHY/NR_TRANSPORT/nr_ulsch_decoding.c:286
+#8  0x0000555555af37b7 in nr_ulsch_procedures (gNB=<optimized out>, frame_rx=<optimized out>, slot_rx=<optimized out>, ulsch_to_decode=<optimized out>, nb_pusch=<optimized out>, UL_INFO=<optimized out>) at /home/murilo/tcc/fork/openairinterface5g/openair1/SCHED_NR/phy_procedures_nr_gNB.c:448
+#9  phy_procedures_gNB_uespec_RX (gNB=<optimized out>, frame_rx=frame_rx@entry=1, slot_rx=slot_rx@entry=8, UL_INFO=UL_INFO@entry=0x7fffffddcaf0) at /home/murilo/tcc/fork/openairinterface5g/openair1/SCHED_NR/phy_procedures_nr_gNB.c:1396
+#10 0x0000555555a89295 in main (argc=<optimized out>, argv=<optimized out>) at /home/murilo/tcc/fork/openairinterface5g/openair1/SIMULATION/NR_PHY/ulsim.c:1497
+LDPCdecoder in section .text of /home/murilo/tcc/fork/openairinterface5g/build/b1/libldpc.so
+[OAI_SW] summary: DEC 28 calls / 84 ops | ENC 28 calls / 84 ops
+Initializing random number generator, seed 1
+handling optarg n
+handling optarg m
+handling optarg r
+handling optarg R
+handling optarg s
+Setting SNR0 to 5.400000
+handling optarg S
+Setting SNR1 to 5.400000
+AWGN: ricean_factor 0.000000
+Pre-allocating padded host memory for the CPU channel pipeline...
+[ULSIM]: length_dmrs: 1, l_prime_mask: 1	number_dmrs_symbols: 1, mapping_type: 1 add_pos: 0 
+[ULSIM]: CDM groups: 1, dmrs_config_type: 0, num_rbs: 106, nb_symb_sch: 12, start_symbol 0
+[ULSIM]: MCS: 9, mod order: 2, code_rate: 6790
+[ULSIM]: VALUE OF G: 29256, TBS: 19464
+*****************************************
+SNR 5.400000: n_errors (8/20,0/8,0/0,0/0) (negative CRC), false_positive 0/20, errors_scrambling (25720/585120,10343/234048,0/0,0/0)
+
+SNR 5.400000: Channel BLER (4.000000e-01,0.000000e+00,-nan,-nan Channel BER (4.395680e-02,4.419179e-02,-nan,-nan) Avg round 1.40, Eff Rate 15571.2000 bits/slot, Eff Throughput 80.00, TBS 19464 bits/slot
+DMRS-PUSCH delay estimation: min 0, max 0, average 0.0
+*****************************************
+
+
+Num RB:	106
+Num symbols:	12
+MCS:	9
+DMRS config type:	0
+DMRS add pos:	0
+PUSCH mapping type:	1
+DMRS length:	1
+DMRS CDM gr w/o data:	1
+
+Thread 1 "nr_ulsim" hit Catchpoint 5 (call to syscall exit_group), __GI__exit (status=status@entry=1) at ../sysdeps/unix/sysv/linux/_exit.c:30
+warning: 30	../sysdeps/unix/sysv/linux/_exit.c: No such file or directory
+
+=== BIBLIOTECAS LDPC/DPDK carregadas no processo ===
+From                To                  Syms Read   Shared Object Library
+0x00007ffff626c000  0x00007ffff6297000  Yes         /home/murilo/tcc/fork/openairinterface5g/build/b1/libldpc_aal.so
+0x00007ffff603c000  0x00007ffff6135000  Yes         /home/murilo/tcc/fork/openairinterface5g/build/b1/libldpc.so
+From                To                  Syms Read   Shared Object Library
+0x00007ffff76aa000  0x00007ffff76bc000  Yes (*)     /usr/local/lib/x86_64-linux-gnu/librte_bbdev.so.25
+(*): Shared library is missing debugging information.
+
+=== CONTAGENS (coluna 'breakpoint already hit N times') ===
+Num     Type           Disp Enb Address            What
+1       breakpoint     keep y   0x00007ffff604e020 in LDPCdecoder at /home/murilo/tcc/fork/openairinterface5g/openair1/PHY/CODING/nrLDPC_decoder/nrLDPC_decoder.c:63
+	breakpoint already hit 84 times
+        silent
+        if $bpnum_dec_shown == 0
+          printf "\n=== PILHA da 1a chamada a LDPCdecoder (thread %d) ===\n", $_thread
+          bt 12
+          info symbol $pc
+          set $bpnum_dec_shown = 1
+        end
+        continue
+2       breakpoint     keep y   0x00007ffff60bb200 in LDPCencoder at /home/murilo/tcc/fork/openairinterface5g/openair1/PHY/CODING/nrLDPC_encoder/ldpc_encoder_optim8segmulti.c:30
+	breakpoint already hit 84 times
+        silent
+        if $bpnum_enc_shown == 0
+          printf "\n=== PILHA da 1a chamada a LDPCencoder (thread %d) ===\n", $_thread
+          bt 12
+          set $bpnum_enc_shown = 1
+        end
+        continue
+3       breakpoint     keep y   0x00007ffff6280be0 in oai_sw_enqueue_ldpc_dec at /home/murilo/tcc/fork/openairinterface5g/openair1/PHY/CODING/nrLDPC_coding/nrLDPC_coding_aal/bbdev_oai_sw.c:771
+	breakpoint already hit 28 times
+        silent
+        continue
+4       breakpoint     keep y   0x00007ffff6281750 in oai_sw_enqueue_ldpc_enc at /home/murilo/tcc/fork/openairinterface5g/openair1/PHY/CODING/nrLDPC_coding/nrLDPC_coding_aal/bbdev_oai_sw.c:798
+	breakpoint already hit 28 times
+        silent
+        continue
+5       catchpoint     keep y                      syscall "exit_group" 
+	catchpoint already hit 1 time
+        printf "\n=== BIBLIOTECAS LDPC/DPDK carregadas no processo ===\n"
+        info sharedlibrary ldpc
+        info sharedlibrary rte_bbdev
+        printf "\n=== CONTAGENS (coluna 'breakpoint already hit N times') ===\n"
+        info breakpoints
+        continue
+/home/murilo/tcc/logs/scripts/gdb/conta.gdb:50: Error in sourced command file:
+Couldn't get registers: No such process.

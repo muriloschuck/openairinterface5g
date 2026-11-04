@@ -1,0 +1,12 @@
+== controle positivo: 1 relatório(s) de corrida (tsan_20261102-140909/corrida.tsan)
+== tsan_20261102-140909
+W2_c3_snr30: relatorios=1 nosso=0 adaptador=0 decodificador=0 outro=1
+W3_c3_snr20.8: relatorios=1 nosso=0 adaptador=0 decodificador=0 outro=1
+W3_c4_snr30: relatorios=1 nosso=0 adaptador=0 decodificador=0 outro=1
+W3_c6_snr30: relatorios=1 nosso=0 adaptador=0 decodificador=0 outro=1
+== total tsan_20261102-140909
+relatorios=4 nosso=0 adaptador=0 decodificador=0 outro=4
+== tsan_20261102-141629
+W3_troca_snr30: relatorios=1 nosso=0 adaptador=0 decodificador=0 outro=1
+== total tsan_20261102-141629
+relatorios=1 nosso=0 adaptador=0 decodificador=0 outro=1

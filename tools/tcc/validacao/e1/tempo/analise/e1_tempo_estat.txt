@@ -1,0 +1,13 @@
+config,n,media_us,dp_us,ic95_pct
+B1,5,1309.9,13.6,1.29
+B1bis,5,1321.3,13.5,1.27
+B2,5,1316.1,6.0,0.57
+B2seq,5,1323.6,15.5,1.46
+execucoes_com_problema=0 []
+A/A B1bis x B1: diferenca=+0.87% t=+1.33 ic95=[-0.95%, +2.69%]
+custo B2 x B1: diferenca=+0.48% t=+0.94 ic95=[-0.94%, +1.89%] limite_superior=+1.89%
+B2seq x B2: diferenca=+0.57% t=+0.99 ic95=[-1.02%, +2.15%]
+freq B1: amostras_ativas=84 mediana=3984 MHz min=3895 MHz
+freq B1bis: amostras_ativas=86 mediana=3983 MHz min=3897 MHz
+freq B2: amostras_ativas=88 mediana=3976 MHz min=3896 MHz
+freq B2seq: amostras_ativas=86 mediana=3974 MHz min=3896 MHz

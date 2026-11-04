@@ -1,0 +1,29 @@
+==================
+WARNING: ThreadSanitizer: data race (pid=364401)
+  Write of size 8 at 0x7ffff4f2c088 by main thread:
+    #0 config_common /home/murilo/tcc/fork/openairinterface5g/openair2/LAYER2/NR_MAC_gNB/config.c:444 (nr_ulsim+0x6e5a7f) (BuildId: 1e753ee2bc40a4d047b0936b34ec022745efbe6e)
+    #1 nr_mac_config_scc /home/murilo/tcc/fork/openairinterface5g/openair2/LAYER2/NR_MAC_gNB/config.c:1036 (nr_ulsim+0x6e5a7f)
+    #2 main /home/murilo/tcc/fork/openairinterface5g/openair1/SIMULATION/NR_PHY/ulsim.c:711 (nr_ulsim+0x547d78) (BuildId: 1e753ee2bc40a4d047b0936b34ec022745efbe6e)
+
+  Previous read of size 8 at 0x7ffff4f2c088 by thread T1 (mutexes: write M0):
+    #0 nrmac_stats_thread /home/murilo/tcc/fork/openairinterface5g/openair2/LAYER2/NR_MAC_gNB/main.c:63 (nr_ulsim+0x6ddac7) (BuildId: 1e753ee2bc40a4d047b0936b34ec022745efbe6e)
+
+  Location is heap block of size 262664 at 0x7ffff4f2c000 allocated by main thread:
+    #0 memalign ../../../../src/libsanitizer/tsan/tsan_interceptors_posix.cpp:861 (libtsan.so.2+0x56894) (BuildId: 66d37dc704b813df6c813b77217284deb43a0042)
+    #1 mac_top_init_gNB /home/murilo/tcc/fork/openairinterface5g/openair2/LAYER2/NR_MAC_gNB/main.c:270 (nr_ulsim+0x6deafb) (BuildId: 1e753ee2bc40a4d047b0936b34ec022745efbe6e)
+    #2 main /home/murilo/tcc/fork/openairinterface5g/openair1/SIMULATION/NR_PHY/ulsim.c:708 (nr_ulsim+0x547cf4) (BuildId: 1e753ee2bc40a4d047b0936b34ec022745efbe6e)
+
+  Mutex M0 (0x7ffff4f6c118) created at:
+    #0 pthread_mutex_init ../../../../src/libsanitizer/tsan/tsan_interceptors_posix.cpp:1398 (libtsan.so.2+0x5b908) (BuildId: 66d37dc704b813df6c813b77217284deb43a0042)
+    #1 mac_top_init_gNB /home/murilo/tcc/fork/openairinterface5g/openair2/LAYER2/NR_MAC_gNB/main.c:304 (nr_ulsim+0x6df039) (BuildId: 1e753ee2bc40a4d047b0936b34ec022745efbe6e)
+    #2 main /home/murilo/tcc/fork/openairinterface5g/openair1/SIMULATION/NR_PHY/ulsim.c:708 (nr_ulsim+0x547cf4) (BuildId: 1e753ee2bc40a4d047b0936b34ec022745efbe6e)
+
+  Thread T1 'MAC_STATS' (tid=364403, running) created by main thread at:
+    #0 pthread_create ../../../../src/libsanitizer/tsan/tsan_interceptors_posix.cpp:1078 (libtsan.so.2+0x5cb02) (BuildId: 66d37dc704b813df6c813b77217284deb43a0042)
+    #1 threadCreate /home/murilo/tcc/fork/openairinterface5g/common/utils/system.c:275 (nr_ulsim+0xcb21f5) (BuildId: 1e753ee2bc40a4d047b0936b34ec022745efbe6e)
+    #2 mac_top_init_gNB /home/murilo/tcc/fork/openairinterface5g/openair2/LAYER2/NR_MAC_gNB/main.c:329 (nr_ulsim+0x6df44e) (BuildId: 1e753ee2bc40a4d047b0936b34ec022745efbe6e)
+    #3 main /home/murilo/tcc/fork/openairinterface5g/openair1/SIMULATION/NR_PHY/ulsim.c:708 (nr_ulsim+0x547cf4) (BuildId: 1e753ee2bc40a4d047b0936b34ec022745efbe6e)
+
+SUMMARY: ThreadSanitizer: data race /home/murilo/tcc/fork/openairinterface5g/openair2/LAYER2/NR_MAC_gNB/config.c:444 in config_common
+==================
+ThreadSanitizer: reported 1 warnings
