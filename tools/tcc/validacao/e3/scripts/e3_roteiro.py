@@ -11,9 +11,19 @@ ap.add_argument("--limits0", required=True)
 ap.add_argument("--trocas", type=int, default=40)
 ap.add_argument("--intervalo", type=float, default=0.3)
 ap.add_argument("--cbs", type=int, default=24)
+ap.add_argument("--registro", default=None, help="arquivo JSONL com cada pedido e cada resposta (opcional)")
 a = ap.parse_args()
 
+# registro opcional das mensagens: uma linha JSON por pedido, por arquivo de limites escrito, por item avaliado e por
+# nota; sem --registro, o comportamento é o de antes. Os instantes usam CLOCK_MONOTONIC, o mesmo relógio da extensão.
+_reg = open(a.registro, "w", buffering=1) if a.registro else None
+_seq = 0
+def registra(**kw):
+    if _reg: _reg.write(json.dumps(kw, ensure_ascii=False) + "\n")
+
 def req(line, timeout=5.0):
+    global _seq
+    _seq += 1; t_env = time.monotonic_ns()
     s = socket.socket(socket.AF_UNIX); s.settimeout(timeout); s.connect(a.sock)
     s.sendall(line.encode() + b"\n")
     buf = b""
@@ -22,6 +32,8 @@ def req(line, timeout=5.0):
         if not c: break
         buf += c
     s.close()
+    registra(tipo="pedido", seq=_seq, t_envio_ns=t_env, t_resposta_ns=time.monotonic_ns(), pedido=line,
+        resposta=buf.decode(errors="replace").rstrip("\n"))
     return json.loads(buf.decode())   # falha aqui = JSON inválido
 
 def lim(name, text):
@@ -29,6 +41,7 @@ def lim(name, text):
     if text is not None:
         with open(p, "w") as f: f.write(text)
         os.chmod(p, 0o644)
+        registra(tipo="arquivo", nome=name, conteudo=text)
     return req(f"setAalAccelConfig limits={p}")
 
 ok = fail = 0
@@ -37,6 +50,7 @@ def item(n, desc, cond, resp):
     if cond: ok += 1
     else: fail += 1
     print(f"{'OK   ' if cond else 'FALHA'} {n:>2} {desc}")
+    registra(tipo="item", item=n, ok=bool(cond), desc=desc)
     if not cond: print("        resposta:", json.dumps(resp, ensure_ascii=False))
 
 def par(caps, name):
@@ -52,6 +66,7 @@ def stat(v):
 
 # desvio do PLANO_E3 (02/11): o socket nasce antes do laço de simulação; espera a decodificação começar (versão 1 com
 # bursts > 0), para que todos os itens rodem com a fila em uso e o item 20 veja a versão 1 congelada com bursts > 0
+registra(tipo="fase", texto="espera do primeiro burst")
 t_esp = time.monotonic()
 while True:
     _, s1 = stat(1)
@@ -62,6 +77,7 @@ while True:
 print(f"# decodificação em andamento: versão 1 com {s1['bursts']} bursts após {time.monotonic() - t_esp:.2f} s de espera")
 
 # estado inicial: descritor puro, depois limite workers 1..4 (não conta como item)
+registra(tipo="fase", texto="estado inicial e limite inicial")
 c0 = req("getAalLpuComputeCapabilities"); w0 = par(c0, "oai_sw.workers")
 print(f"# inicial: descriptor_version {c0.get('descriptor_version')} workers {w0.get('min')}..{w0.get('max')}")
 r = req(f"setAalAccelConfig limits={a.limits0}")
@@ -69,6 +85,7 @@ print(f"# limite inicial: {r.get('status')} descriptor_version {r.get('descripto
 if not (c0.get("descriptor_version") == 1 and (w0.get("min"), w0.get("max")) == (1, 16) and r.get("status") == "OK"):
     print("abortado: estado inicial diferente do previsto"); sys.exit(2)
 
+registra(tipo="fase", texto="itens 1 a 30: contrato da AALI-C (V3)")
 c = req("getAalLpuComputeCapabilities"); w = par(c, "oai_sw.workers")
 item(1, "caps: handle baseband_oai_sw, descriptor_version 2, workers 1..4",
      c.get("status") == "OK" and c.get("aal_lpu_handle") == "baseband_oai_sw"
@@ -140,6 +157,7 @@ except Exception as e:
 try:
     s = socket.socket(socket.AF_UNIX); s.connect(a.sock)
     s.sendall(b"getAalLpuComputeCapabilities\n" * 200); s.close()
+    registra(tipo="nota", texto="cliente bruto: 200 pedidos getAalLpuComputeCapabilities numa conexão, fechada sem ler as respostas")
 except Exception as e:
     print("        (cliente precoce:", repr(e), ")")
 time.sleep(0.5)
@@ -153,6 +171,7 @@ item(30, "JSON válido com aspas; processo vivo e respondendo após cliente que 
 CICLO = [("seq", 1, 1), ("par", 1, 1), ("par", 2, 1), ("par", 3, 1), ("par", 3, 2), ("par", 4, 1), ("par", 3, 64), ("par", 4, 2)]
 g, v, t = cfg()
 print(f"# alternância: {a.trocas} trocas a cada {a.intervalo} s, a partir da versão {v}")
+registra(tipo="fase", texto=f"alternância: {a.trocas} trocas a cada {a.intervalo} s")
 reg = []   # (versão, t0, config)
 aceitas = True
 for k in range(a.trocas):

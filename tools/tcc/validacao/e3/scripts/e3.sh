@@ -34,7 +34,7 @@ for i in $(seq 1 60); do [[ -S $SOCK ]] && break; sleep 0.5; done
 [[ -S $SOCK ]] || { echo "socket não apareceu"; tail -20 "$OUT/ctl.log"; exit 1; }
 P=$(pgrep -n nr_ulsim)
 python3 $SC/e3_roteiro.py --sock $SOCK --pid "$P" --dir "$OUT" --limits0 "$L0" \
-  --trocas $TROCAS --intervalo $INTERVALO --cbs 24 | tee "$OUT/roteiro.txt"
+  --trocas $TROCAS --intervalo $INTERVALO --cbs 24 --registro "$OUT/mensagens.jsonl" | tee "$OUT/roteiro.txt"
 rc=${PIPESTATUS[0]}
 echo "# esperando o nr_ulsim terminar (pid $P)"
 while [[ -d /proc/$P ]]; do sleep 2; done

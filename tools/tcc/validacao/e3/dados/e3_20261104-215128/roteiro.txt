@@ -1,0 +1,42 @@
+# decodificação em andamento: versão 1 com 1 bursts após 0.10 s de espera
+# inicial: descriptor_version 1 workers 1..16
+# limite inicial: OK descriptor_version 2 adjusted []
+OK     1 caps: handle baseband_oai_sw, descriptor_version 2, workers 1..4
+OK     2 get: versão 1, seq/1/1
+OK     3 set oai_sw.nada=1 -> UNKNOWN_PARAM
+OK     4 set oai_sw.mode=rapido -> INVALID_TYPE
+OK     5 set oai_sw.workers=2x -> INVALID_TYPE
+OK     6 set oai_sw.batch=65 -> OUT_OF_RANGE
+OK     7 set oai_sw.batch=0 -> OUT_OF_RANGE
+OK     8 set oai_sw.workers=8 -> LIMIT_EXCEEDED
+OK     9 set (vazio) -> BAD_REQUEST
+OK    10 set oai_sw.workers=2 oai_sw.workers=3 -> BAD_REQUEST
+OK    11 set expected_version=abc oai_sw.workers=2 -> BAD_REQUEST
+OK    12 set oai_sw.workers -> BAD_REQUEST
+OK    15 set oai_sw.mode=par oai_sw.workers=8 -> LIMIT_EXCEEDED
+OK    16 set expected_version=7 oai_sw.workers=2 -> VERSION_CONFLICT
+OK    13 op desconhecida -> BAD_REQUEST
+OK    14 caps com token extra -> BAD_REQUEST
+OK    17 get após erros: versão 1, seq/1/1
+OK    18 set par/3/2 -> OK, versão 2
+OK    19 get: versão 2, par/3/2
+OK    20 stats: v2 201->403, v1 1->1
+OK    21 limits workers 1 2 -> OK, descriptor 3, versão 3, adjusted workers
+OK    22 get: versão 3, par/2/2
+OK    23 limits workers 20 30 -> BAD_REQUEST, descriptor fica 3
+OK    24 limits mode 5 9 -> BAD_REQUEST, descriptor fica 3
+OK    25 limits batch 0 0 -> BAD_REQUEST, descriptor fica 3
+OK    26 limits linha malformada -> BAD_REQUEST, descriptor fica 3
+OK    27 limits arquivo inexistente -> BAD_REQUEST, descriptor fica 3
+OK    28 limits parâmetro desconhecido -> BAD_REQUEST, descriptor fica 3
+OK    29 limits workers 1 4 -> OK, descriptor 4, adjusted vazio, versão 3
+OK    30 JSON válido com aspas; processo vivo e respondendo após cliente que fecha sem ler
+# alternância: 40 trocas a cada 0.3 s, a partir da versão 3
+OK    31 40 trocas aceitas, versões 4..43 consecutivas
+OK    32 todas as versões com bursts > 0 e ops = 24 × bursts (sem bursts: [], ops: [])
+OK    33 t0 ≤ t1 ≤ t2 em todas as versões
+# t1 - t0 (pedido até a versão valer): n=40 mediana=69.1 us máx=147.4 us
+# t2 - t1 (versão valer até o primeiro burst; depende do ritmo do nr_ulsim): n=40 mediana=2633.3 us máx=5265.1 us
+OK    34 t1 - t0 medido em todas as trocas, todos abaixo de 50 ms
+OK    35 nr_ulsim ainda rodando ao fim da alternância
+RESULTADO: 35 OK, 0 FALHA
