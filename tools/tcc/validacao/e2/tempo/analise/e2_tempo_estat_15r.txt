@@ -1,0 +1,73 @@
+config,tarefas,n,media_us,dp_us,ic95_pct,relativo_seq
+seq,0,15,1293.9,17.1,0.73,1.000
+w16b64,1,15,1459.0,8.3,0.31,1.128
+w1b1,1,15,1457.2,8.8,0.33,1.126
+w1b2,1,15,1460.6,3.9,0.15,1.129
+w1b6,1,15,1459.0,3.7,0.14,1.128
+w1b64,1,15,1457.9,6.6,0.25,1.127
+w2b64,1,15,1458.6,4.9,0.19,1.127
+w3b64,1,15,1456.3,9.6,0.36,1.126
+w4b64,1,15,1453.3,9.2,0.35,1.123
+w6b64,1,15,1459.2,9.3,0.35,1.128
+w2b1,2,15,1056.7,76.7,4.02,0.817
+w2b2,2,15,1018.9,98.5,5.35,0.787
+w2b6,2,15,1023.2,68.5,3.71,0.791
+w3b1,3,15,801.9,34.5,2.38,0.620
+w3b2,3,15,803.9,22.7,1.56,0.621
+w3b6,3,15,851.2,20.9,1.36,0.658
+w16b6,4,15,827.2,24.9,1.67,0.639
+w4b1,4,15,719.1,47.3,3.65,0.556
+w4b1bis,4,15,709.9,46.2,3.61,0.549
+w4b2,4,15,744.3,32.7,2.44,0.575
+w4b6,4,15,837.1,20.1,1.33,0.647
+w6b6,4,15,829.9,26.0,1.74,0.641
+w6b1,6,15,642.0,3.6,0.31,0.496
+w6b2,6,15,731.2,3.7,0.28,0.565
+w16b2,12,15,695.0,3.4,0.27,0.537
+w16b1,16,15,591.2,18.3,1.71,0.457
+execucoes_com_problema=0 []
+A/A w4b1bis x w4b1: diferenca=-1.27% t=-0.53
+tarefa unica (9 configs): media=1457.9 us amplitude=0.50% min=w4b64 max=w1b2
+seq x tarefa unica: -11.25%
+simultaneas=1: configs=9 media_do_grupo=1457.9 us relativo_seq=1.127
+simultaneas=2: configs=3 media_do_grupo=1032.9 us relativo_seq=0.798
+simultaneas=3: configs=3 media_do_grupo=819.0 us relativo_seq=0.633
+simultaneas=4: configs=6 media_do_grupo=777.9 us relativo_seq=0.601
+simultaneas=6: configs=4 media_do_grupo=664.9 us relativo_seq=0.514
+saturacao w16b1 x w6b1: diferenca=-7.91% t=-10.56
+rodadas_completas=15
+pareada w4b1bis x w4b1: n=15 diferenca=-1.04% ic95=[-4.92%, +2.84%] t=-0.57
+pareada w6b1 x w4b1: n=15 diferenca=-10.36% ic95=[-13.60%, -7.11%] t=-6.85
+pareada w16b1 x w6b1: n=15 diferenca=-7.91% ic95=[-9.55%, -6.27%] t=-10.37
+pareada TAREFA_UNICA x seq: n=15 diferenca=+12.69% ic95=[+11.86%, +13.53%] t=+32.69
+pareada w16b1 x TAREFA_UNICA: n=15 diferenca=-59.45% ic95=[-60.15%, -58.75%] t=-181.93
+pareada w6b2 x w4b2: n=15 diferenca=-1.58% ic95=[-3.96%, +0.79%] t=-1.43
+pareada w4b1 x w3b1: n=15 diferenca=-10.13% ic95=[-14.40%, -5.86%] t=-5.09
+ic95_acima_de_5pct=1 w2b2=5.35%
+ic95_max=5.35% em w2b2
+freq seq: amostras_ativas=227 mediana=3996 MHz min=3893 MHz
+freq w16b64: amostras_ativas=306 mediana=3998 MHz min=3895 MHz
+freq w1b1: amostras_ativas=300 mediana=3998 MHz min=3896 MHz
+freq w1b2: amostras_ativas=302 mediana=3998 MHz min=3897 MHz
+freq w1b6: amostras_ativas=297 mediana=3998 MHz min=3893 MHz
+freq w1b64: amostras_ativas=301 mediana=3998 MHz min=3895 MHz
+freq w2b64: amostras_ativas=316 mediana=3998 MHz min=3897 MHz
+freq w3b64: amostras_ativas=305 mediana=3998 MHz min=3897 MHz
+freq w4b64: amostras_ativas=290 mediana=3998 MHz min=3895 MHz
+freq w6b64: amostras_ativas=300 mediana=3998 MHz min=3895 MHz
+freq w2b1: amostras_ativas=315 mediana=3998 MHz min=3102 MHz
+freq w2b2: amostras_ativas=310 mediana=3997 MHz min=1900 MHz
+freq w2b6: amostras_ativas=308 mediana=3998 MHz min=2800 MHz
+freq w3b1: amostras_ativas=276 mediana=3996 MHz min=3501 MHz
+freq w3b2: amostras_ativas=280 mediana=3993 MHz min=2508 MHz
+freq w3b6: amostras_ativas=267 mediana=3992 MHz min=2800 MHz
+freq w16b6: amostras_ativas=265 mediana=3992 MHz min=3894 MHz
+freq w4b1: amostras_ativas=263 mediana=3991 MHz min=3896 MHz
+freq w4b1bis: amostras_ativas=274 mediana=3966 MHz min=2163 MHz
+freq w4b2: amostras_ativas=285 mediana=3984 MHz min=2799 MHz
+freq w4b6: amostras_ativas=267 mediana=3990 MHz min=2201 MHz
+freq w6b6: amostras_ativas=259 mediana=3992 MHz min=3102 MHz
+freq w6b1: amostras_ativas=239 mediana=3910 MHz min=3895 MHz
+freq w6b2: amostras_ativas=288 mediana=3930 MHz min=3896 MHz
+freq w16b2: amostras_ativas=282 mediana=3918 MHz min=3199 MHz
+freq w16b1: amostras_ativas=247 mediana=3909 MHz min=3895 MHz

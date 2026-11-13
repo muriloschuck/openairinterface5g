@@ -20,6 +20,7 @@ Os commits e as situações abaixo vêm da verificação de 04/11/2026, feita co
 | `e2/contagens/dados/v2_20261101-194211` | `80983882e2` | 8098388 | — |
 | `e2/concorrencia/dados/e2_concorrencia_20261102-132244` | `80983882e2` | 8098388 | — |
 | `e2/tempo/dados/e2_tempo_20261102-163741` | `80983882e2` | 8098388 | — |
+| `e2/tempo/dados/e2_tempo_20261113-003929` | `a944849c52` (código igual ao `80983882e2`: `diff --stat` vazio em `openair1`, `common` e `executables`) | 8098388 | mesmos binários de `build/`; medida em 13/11/2026, após reboot, com kernel `7.0.0-42-generic` e hugepages realocadas |
 | `e2/saturacao/dados/e2_saturacao_20261103-215854` | `80983882e2` | 8098388 | — |
 | `tsan/dados/tsan_20261102-140909` | `80983882e2` | 8098388 | `build_tsan/` |
 | `tsan/dados/tsan_20261102-141629` | `80983882e2` | 8098388 | `build_tsan/` |
@@ -49,7 +50,7 @@ Valores lidos com `lscpu`, `uname -r`, `pkg-config --modversion libdpdk`, `bpftr
 | CPU | Intel Core i5-8300H @ 2,30 GHz; 4 núcleos, 8 threads; pares de hyperthread 0-4, 1-5, 2-6, 3-7; 800 a 4000 MHz |
 | Frequência | driver `intel_pstate`, governor `powersave` nas 8 CPUs, `energy_performance_preference` = `balance_performance`, turbo ligado (`no_turbo=0`); frequência livre durante as medições (decisão do passo 6, `ambiente_tempo/`) |
 | Energia | na tomada (`power_supply/*/online` = 1 nos passos 0 das medições de tempo) |
-| Kernel | `7.0.0-38-generic` (a máquina não reiniciou entre as medições: 10 dias ligada em 02/11, 12 em 03/11) |
+| Kernel | `7.0.0-38-generic` (a máquina não reiniciou entre as medições: 10 dias ligada em 02/11, 12 em 03/11); `7.0.0-42-generic` na execução de 15 rodadas do `e2/tempo/` (13/11/2026, após reboot) |
 | DPDK | 24.11.2 (`librte_bbdev.so.25`) |
 | bpftrace | v0.25.0 |
 | gcc | 15.2.0 (Ubuntu 15.2.0-16ubuntu1) |
